@@ -10,6 +10,9 @@ langchain-openai>=0.2.0,<0.3.0
 
 # Vector store
 chromadb>=0.5.0,<1.0.0
+# Chroma 0.6.x product telemetry calls posthog.capture(distinct_id, event, props);
+# posthog>=6 breaks that signature — keep <6 until Chroma releases a fix.
+posthog>=4.0.0,<6.0.0
 
 # DeepSeek uses OpenAI-compatible API
 openai>=1.55.0,<2.0.0
@@ -19,3 +22,6 @@ python-dotenv>=1.0.0,<2.0.0
 
 # PDF loading (PyPDFLoader)
 pypdf>=5.0.0,<6.0.0
+
+# Alibaba DashScope (百炼) — required by DashScopeEmbeddings
+dashscope>=1.20.0,<2.0.0

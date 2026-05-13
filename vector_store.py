@@ -11,8 +11,8 @@ from typing import Any
 import chromadb.config
 from dotenv import load_dotenv
 from langchain_community.embeddings import DashScopeEmbeddings
-from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
+from langchain_chroma import Chroma
 
 _PROJECT_ROOT = Path(__file__).resolve().parent  # 项目根目录路径
 

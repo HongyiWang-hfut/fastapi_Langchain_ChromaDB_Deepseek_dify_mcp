@@ -26,3 +26,7 @@ pypdf>=5.0.0,<6.0.0
 
 # Alibaba DashScope (百炼) — required by DashScopeEmbeddings
 dashscope>=1.20.0,<2.0.0
+
+# MCP official SDK
+mcp>=1.27.0,<2.0.0
+

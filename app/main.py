@@ -17,6 +17,30 @@ from pydantic import BaseModel, Field, SecretStr
 
 from vector_store import load_or_rebuild_campus_chroma, retrieve_top_chunks
 
+
+class ConversationMemory:
+    """轻量对话记忆，按学生 ID 保存最近 N 轮对话。"""
+
+    def __init__(self, max_rounds: int = 4):
+        self._store: dict[str, list[dict[str, str]]] = {}
+        self.max_rounds = max_rounds
+
+    def add(self, student_id: str, role: str, content: str) -> None:
+        if student_id not in self._store:
+            self._store[student_id] = []
+        self._store[student_id].append({"role": role, "content": content})
+        if len(self._store[student_id]) > self.max_rounds * 2:
+            self._store[student_id] = self._store[student_id][-(self.max_rounds * 2):]
+
+    def get_history(self, student_id: str) -> list[dict[str, str]]:
+        return self._store.get(student_id, [])
+
+    def clear(self, student_id: str) -> None:
+        self._store.pop(student_id, None)
+
+
+_conversation_memory = ConversationMemory()
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 load_dotenv(PROJECT_ROOT / ".env")
@@ -224,20 +248,32 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
 
 @app.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest) -> AskResponse:
-    """主问答接口：自动 MCP -> RAG -> 自动生成。"""
+    """主问答接口：自动 MCP -> RAG -> 自动生成（含多轮对话记忆）。"""
     question = request.question.strip()
     student_id = request.student_id.strip() or "S001"
     if not question:
         raise HTTPException(status_code=400, detail="question is required")
 
     try:
-        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(question, student_id)
-        messages = [
-            SystemMessage(content=ASK_SYSTEM_PROMPT),
-            HumanMessage(content=llm_prompt),
-        ]
+        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(
+            question, student_id
+        )
+        history = _conversation_memory.get_history(student_id)
+        messages = [SystemMessage(content=ASK_SYSTEM_PROMPT)]
+        for h in history:
+            if h["role"] == "user":
+                messages.append(HumanMessage(content=h["content"]))
+            else:
+                messages.append(SystemMessage(content=f"你之前的回答：{h['content']}"))
+
+        messages.append(HumanMessage(content=llm_prompt))
+
         response = await _get_llm().ainvoke(messages)
         answer = _mark_auto_generated(response.content.strip(), auto_generated)
+
+        _conversation_memory.add(student_id, "user", question)
+        _conversation_memory.add(student_id, "assistant", answer)
+
         return AskResponse(
             answer=answer,
             mode=mode,
@@ -274,13 +310,25 @@ async def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
         raise HTTPException(status_code=400, detail="question is required")
 
     try:
-        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(question, student_id)
-        messages = [
-            SystemMessage(content=ASK_SYSTEM_PROMPT),
-            HumanMessage(content=llm_prompt),
-        ]
+        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(
+            question, student_id
+        )
+        history = _conversation_memory.get_history(student_id)
+        messages = [SystemMessage(content=ASK_SYSTEM_PROMPT)]
+        for h in history:
+            if h["role"] == "user":
+                messages.append(HumanMessage(content=h["content"]))
+            else:
+                messages.append(SystemMessage(content=f"你之前的回答：{h['content']}"))
+
+        messages.append(HumanMessage(content=llm_prompt))
+
         response = await _get_llm().ainvoke(messages)
         answer = _mark_auto_generated(response.content.strip(), auto_generated)
+
+        _conversation_memory.add(student_id, "user", question)
+        _conversation_memory.add(student_id, "assistant", answer)
+
         return AskWithToolsResponse(
             answer=answer,
             mode=mode,
@@ -292,3 +340,14 @@ async def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error: {exc}") from exc
+
+
+class ResetRequest(BaseModel):
+    student_id: str = Field(default="S001", description="学生 ID")
+
+
+@app.post("/reset")
+async def reset_conversation(request: ResetRequest) -> dict[str, str]:
+    """清除指定学生 ID 的对话历史。"""
+    _conversation_memory.clear(request.student_id)
+    return {"status": "ok", "message": f"已清除 {request.student_id} 的对话历史"}

@@ -1,7 +1,8 @@
-"""校园智能问答助手：FastAPI HTTP 入口，支持 MCP、RAG 和自动生成回退。"""
+"""校园智能问答助手：FastAPI HTTP 入口，支持 MCP、RAG 和自动生成回退（异步）。"""
 
 from __future__ import annotations
 
+import asyncio
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -23,7 +24,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 app = FastAPI(
     title="Campus Smart Q&A Assistant",
     description="Campus Q&A with RAG + MCP + auto-generated fallback",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 if FRONTEND_DIR.exists():
@@ -31,7 +32,7 @@ if FRONTEND_DIR.exists():
 
 
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
+async def index() -> FileResponse:
     """返回前端页面。"""
     index_file = FRONTEND_DIR / "index.html"
     if not index_file.exists():
@@ -40,7 +41,7 @@ def index() -> FileResponse:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     """健康检查。"""
     return {"status": "ok"}
 
@@ -114,7 +115,7 @@ def _should_use_tools(question: str) -> bool:
     return any(kw in question for kw in keywords)
 
 
-def _call_tools_for_question(question: str, student_id: str = "S001") -> dict[str, str]:
+async def _call_tools_for_question(question: str, student_id: str = "S001") -> dict[str, str]:
     """根据问题调用相应的工具，收集结果。"""
     try:
         mcp_client = _get_mcp_client()
@@ -122,21 +123,21 @@ def _call_tools_for_question(question: str, student_id: str = "S001") -> dict[st
 
         if any(kw in question for kw in ["课表", "课程", "上课"]):
             try:
-                course_data = mcp_client.call_tool("get_course_schedule", student_id=student_id)
+                course_data = await mcp_client.call_tool("get_course_schedule", student_id=student_id)
                 results["课表数据"] = str(course_data)
             except Exception as exc:
                 results["课表数据"] = f"获取失败: {exc}"
 
         if any(kw in question for kw in ["借书", "借阅", "图书馆"]):
             try:
-                library_data = mcp_client.call_tool("get_library_status", student_id=student_id)
+                library_data = await mcp_client.call_tool("get_library_status", student_id=student_id)
                 results["借阅数据"] = str(library_data)
             except Exception as exc:
                 results["借阅数据"] = f"获取失败: {exc}"
 
         if any(kw in question for kw in ["教室", "房间", "自习室"]):
             try:
-                room_data = mcp_client.call_tool("query_room_availability", room_id="教学楼 101")
+                room_data = await mcp_client.call_tool("query_room_availability", room_id="教学楼 101")
                 results["教室数据"] = str(room_data)
             except Exception as exc:
                 results["教室数据"] = f"获取失败: {exc}"
@@ -156,7 +157,7 @@ def _mark_auto_generated(answer: str, auto_generated: bool) -> str:
     return f"【自动生成】{stripped}"
 
 
-def _build_context_prompt(question: str, student_id: str) -> tuple[str, list[str], dict[str, str], bool, str]:
+async def _build_context_prompt(question: str, student_id: str) -> tuple[str, list[str], dict[str, str], bool, str]:
     """统一构建上下文：MCP -> RAG -> 自动生成。"""
     tool_results: dict[str, str] = {}
     tools_used: list[str] = []
@@ -164,7 +165,7 @@ def _build_context_prompt(question: str, student_id: str) -> tuple[str, list[str
     mode = "rag"
 
     if _should_use_tools(question):
-        tool_results = _call_tools_for_question(question, student_id)
+        tool_results = await _call_tools_for_question(question, student_id)
         if tool_results and "error" not in tool_results:
             tools_used = list(tool_results.keys())
             tool_context = "\n".join([f"【{k}】\n{v}" for k, v in tool_results.items()])
@@ -177,7 +178,8 @@ def _build_context_prompt(question: str, student_id: str) -> tuple[str, list[str
             return llm_prompt, tools_used, tool_results, auto_generated, "mcp"
 
     vectorstore = _get_vectorstore()
-    hits = retrieve_top_chunks(
+    hits = await asyncio.to_thread(
+        retrieve_top_chunks,
         vectorstore,
         question,
         k=3,
@@ -194,7 +196,7 @@ def _build_context_prompt(question: str, student_id: str) -> tuple[str, list[str
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(request: AskRequest) -> AskResponse:
+async def ask(request: AskRequest) -> AskResponse:
     """主问答接口：自动 MCP -> RAG -> 自动生成。"""
     question = request.question.strip()
     student_id = request.student_id.strip() or "S001"
@@ -202,12 +204,13 @@ def ask(request: AskRequest) -> AskResponse:
         raise HTTPException(status_code=400, detail="question is required")
 
     try:
-        llm_prompt, tools_used, tool_results, auto_generated, mode = _build_context_prompt(question, student_id)
+        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(question, student_id)
         messages = [
             SystemMessage(content=ASK_SYSTEM_PROMPT),
             HumanMessage(content=llm_prompt),
         ]
-        answer = _mark_auto_generated(_get_llm().invoke(messages).content.strip(), auto_generated)
+        response = await _get_llm().ainvoke(messages)
+        answer = _mark_auto_generated(response.content.strip(), auto_generated)
         return AskResponse(
             answer=answer,
             mode=mode,
@@ -235,7 +238,7 @@ class AskWithToolsResponse(BaseModel):
 
 
 @app.post("/ask_with_tools", response_model=AskWithToolsResponse)
-def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
+async def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
     """工具感知问答接口，保留给需要显式查看工具结果的页面使用。"""
     question = request.question.strip()
     student_id = request.student_id.strip() or "S001"
@@ -244,12 +247,13 @@ def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
         raise HTTPException(status_code=400, detail="question is required")
 
     try:
-        llm_prompt, tools_used, tool_results, auto_generated, mode = _build_context_prompt(question, student_id)
+        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(question, student_id)
         messages = [
             SystemMessage(content=ASK_SYSTEM_PROMPT),
             HumanMessage(content=llm_prompt),
         ]
-        answer = _mark_auto_generated(_get_llm().invoke(messages).content.strip(), auto_generated)
+        response = await _get_llm().ainvoke(messages)
+        answer = _mark_auto_generated(response.content.strip(), auto_generated)
         return AskWithToolsResponse(
             answer=answer,
             mode=mode,
@@ -261,4 +265,3 @@ def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error: {exc}") from exc
-

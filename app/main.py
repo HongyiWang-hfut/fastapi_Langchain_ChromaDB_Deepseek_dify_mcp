@@ -29,7 +29,12 @@ from config.prompts import (
     RAG_USER_TEMPLATE,
     SYSTEM_PROMPT,
 )
-from vector_store import create_project_embeddings, load_or_rebuild_campus_chroma, retrieve_top_chunks
+from vector_store import (
+    HybridRetriever,
+    create_project_embeddings,
+    load_or_rebuild_campus_chroma,
+    retrieve_top_chunks,
+)
 
 
 class ConversationMemory:
@@ -117,6 +122,19 @@ def _get_vectorstore():
 
 
 @lru_cache
+def _get_hybrid_retriever():
+    """构建混合检索器（向量+BM25）。"""
+    vs = _get_vectorstore()
+    # 从向量库中提取所有文本作为 BM25 语料
+    try:
+        all_docs = vs._collection.get()
+        corpus = all_docs.get("documents", []) or []
+    except Exception:
+        corpus = []
+    return HybridRetriever(vs, corpus=corpus)
+
+
+@lru_cache
 def _get_mcp_client():
     """初始化 MCP 客户端。"""
     from mcp_client import MCPClient
@@ -195,11 +213,10 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
             llm_prompt = MCP_USER_TEMPLATE.format(tool_context=tool_context, question=question)
             return llm_prompt, tools_used, tool_results, auto_generated, "mcp"
 
-    # Step 2: RAG 向量检索
-    vectorstore = _get_vectorstore()
+    # Step 2: RAG 混合检索（向量 + BM25）
+    hybrid = _get_hybrid_retriever()
     hits = await asyncio.to_thread(
-        retrieve_top_chunks,
-        vectorstore,
+        hybrid.retrieve,
         question,
         k=3,
         max_margin_from_best=0.22,

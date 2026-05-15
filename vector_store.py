@@ -276,6 +276,101 @@ def retrieve_top_chunks(  # 相似度检索，返回最相关的文本片段
     return results[:k]
 
 
+class HybridRetriever:
+    """混合检索：向量语义 + BM25 关键词，RRF 融合排序。"""
+
+    def __init__(self, vectorstore: Chroma, corpus: list[str] | None = None):
+        self.vectorstore = vectorstore
+        self._corpus = corpus or []
+        self._bm25 = None
+        if self._corpus:
+            self._build_bm25()
+
+    def _build_bm25(self) -> None:
+        """基于 corpus 构建 BM25 索引。"""
+        from rank_bm25 import BM25Okapi
+
+        tokenized = [self._tokenize(doc) for doc in self._corpus]
+        self._bm25 = BM25Okapi(tokenized)
+
+    @staticmethod
+    def _tokenize(text: str) -> list[str]:
+        """简单分词：中文按字符切，英文按空格。"""
+        import re
+
+        tokens: list[str] = []
+        for segment in re.split(r"([a-zA-Z0-9]+)", text):
+            if re.match(r"^[a-zA-Z0-9]+$", segment):
+                tokens.append(segment.lower())
+            else:
+                # 中文：单个字符作为 token
+                tokens.extend(list(segment.strip()))
+        return [t for t in tokens if t]
+
+    @staticmethod
+    def _rrf(rankings: list[list[int]], k: int = 60) -> list[int]:
+        """Reciprocal Rank Fusion：合并多个排序结果。"""
+        scores: dict[int, float] = {}
+        for ranking in rankings:
+            for rank, doc_id in enumerate(ranking):
+                scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank + 1)
+        return sorted(scores, key=scores.__getitem__, reverse=True)
+
+    def retrieve(
+        self,
+        question: str,
+        k: int = 3,
+        *,
+        vector_weight: float = 0.5,
+        **vector_kwargs,
+    ) -> list[dict[str, Any]]:
+        """混合检索：融合向量和 BM25 结果。"""
+        # 1. 向量检索
+        vector_hits = retrieve_top_chunks(
+            self.vectorstore, question, k=max(k * 3, 15), **vector_kwargs
+        )
+        if not vector_hits:
+            return []
+
+        # 2. BM25 检索
+        bm25_scores: list[float] | None = None
+        if self._bm25 is not None:
+            bm25_scores = self._bm25.get_scores(self._tokenize(question))
+            # 按 BM25 得分排序取前 k*3
+            bm25_indices = sorted(
+                range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True
+            )[: max(k * 3, 15)]
+        else:
+            bm25_indices = []
+
+        # 3. RRF 融合
+        vector_indices = list(range(len(vector_hits)))
+        rankings = [vector_indices]
+        if bm25_indices:
+            rankings.append(bm25_indices)
+
+        fused_indices = self._rrf(rankings)
+
+        # 4. 映射回结果
+        seen = set()
+        results: list[dict[str, Any]] = []
+        for idx in fused_indices:
+            if idx < len(vector_hits):
+                doc_id = vector_hits[idx].get("content", "")
+                if doc_id and doc_id not in seen:
+                    seen.add(doc_id)
+                    # 标注来源
+                    hit = dict(vector_hits[idx])
+                    if bm25_scores is not None and idx < len(bm25_scores):
+                        hit["bm25_score"] = float(bm25_scores[idx])
+                    hit["source"] = "hybrid"
+                    results.append(hit)
+            if len(results) >= k:
+                break
+
+        return results
+
+
 def _main() -> None:  # 脚本主入口：数据→嵌入→持久化→检索演示
     """脚本入口：切片 → 建库 → 打印检索示例。"""
     try:

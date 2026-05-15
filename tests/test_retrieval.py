@@ -107,3 +107,50 @@ class TestVectorStore:
         )
         hits = retrieve_top_chunks(vs, "完全不相关的内容__xyz__", k=3, max_distance=0.1)
         assert hits == []
+
+
+class TestHybridRetriever:
+    def test_build_and_hybrid_retrieve(self, tmp_path):
+        from langchain_core.documents import Document
+        from vector_store import DemoEmbeddings, HybridRetriever, build_campus_chroma
+
+        emb = DemoEmbeddings(dimension=128)
+        chunks = [
+            Document(page_content="图书馆开放时间：周一至周日 7:30-22:30", metadata={"source": "test"}),
+            Document(page_content="借阅规则：本科生可借图书15册，借期30天", metadata={"source": "test"}),
+            Document(page_content="校园网SSID：Campus-WiFi，全校覆盖", metadata={"source": "test"}),
+        ]
+        persist_dir = tmp_path / "hybrid_test"
+        vs = build_campus_chroma(
+            chunks,
+            persist_directory=str(persist_dir),
+            collection_name="hybrid_test",
+            embeddings=emb,
+            reset=True,
+        )
+        corpus = [c.page_content for c in chunks]
+        retriever = HybridRetriever(vs, corpus=corpus)
+        hits = retriever.retrieve("图书馆开放", k=2)
+        assert len(hits) > 0
+        assert all("content" in h for h in hits)
+
+    def test_tokenize(self):
+        from vector_store import HybridRetriever
+
+        tokens = HybridRetriever._tokenize("图书馆开放时间")
+        assert isinstance(tokens, list)
+        assert len(tokens) > 0
+
+    def test_tokenize_mixed(self):
+        from vector_store import HybridRetriever
+
+        tokens = HybridRetriever._tokenize("Campus-WiFi 全校覆盖")
+        assert "campus-wifi" in tokens or "campus" in tokens
+
+    def test_rrf_ordering(self):
+        from vector_store import HybridRetriever
+
+        # RRF: 两个排序 [doc3, doc1, doc2] 和 [doc1, doc3, doc0]
+        fused = HybridRetriever._rrf([[3, 1, 2], [1, 3, 0]])
+        assert fused[0] in (1, 3)  # doc1 或 doc3 应该排前面
+        assert 0 in fused[-2:]  # doc0 应该在后面

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -351,3 +352,52 @@ async def reset_conversation(request: ResetRequest) -> dict[str, str]:
     """清除指定学生 ID 的对话历史。"""
     _conversation_memory.clear(request.student_id)
     return {"status": "ok", "message": f"已清除 {request.student_id} 的对话历史"}
+
+
+async def _stream_answer(question: str, student_id: str):
+    """生成 SSE 事件流：先发元信息，再逐个发送 LLM token。"""
+    llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(
+        question, student_id
+    )
+    yield f"data: {json.dumps({'event': 'meta', 'mode': mode, 'auto_generated': auto_generated, 'tools_used': tools_used})}\n\n"
+
+    history = _conversation_memory.get_history(student_id)
+    messages = [SystemMessage(content=ASK_SYSTEM_PROMPT)]
+    for h in history:
+        if h["role"] == "user":
+            messages.append(HumanMessage(content=h["content"]))
+        else:
+            messages.append(SystemMessage(content=f"你之前的回答：{h['content']}"))
+    messages.append(HumanMessage(content=llm_prompt))
+
+    full_answer = ""
+    async for chunk in _get_llm().astream(messages):
+        if chunk.content:
+            token = chunk.content
+            full_answer += token
+            yield f"data: {json.dumps({'event': 'token', 'token': token})}\n\n"
+
+    final_answer = _mark_auto_generated(full_answer.strip(), auto_generated)
+    _conversation_memory.add(student_id, "user", question)
+    _conversation_memory.add(student_id, "assistant", final_answer)
+
+    yield f"data: {json.dumps({'event': 'done'})}\n\n"
+
+
+@app.post("/ask/stream")
+async def ask_stream(request: AskRequest) -> StreamingResponse:
+    """流式问答接口：SSE 格式返回，适合前端流式展示。"""
+    question = request.question.strip()
+    student_id = request.student_id.strip() or "S001"
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
+
+    return StreamingResponse(
+        _stream_answer(question, student_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

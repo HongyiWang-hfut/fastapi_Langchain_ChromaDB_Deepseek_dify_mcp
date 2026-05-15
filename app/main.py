@@ -17,6 +17,12 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
 from config.intent_classifier import IntentClassifier
+from database import (
+    clear_conversation_history,
+    get_conversation_history,
+    log_interaction,
+    save_conversation,
+)
 from config.prompts import (
     AUTO_GENERATED_TEMPLATE,
     MCP_USER_TEMPLATE,
@@ -27,24 +33,20 @@ from vector_store import create_project_embeddings, load_or_rebuild_campus_chrom
 
 
 class ConversationMemory:
-    """轻量对话记忆，按学生 ID 保存最近 N 轮对话。"""
+    """对话记忆（SQLite 持久化），按学生 ID 保留最近 N 轮对话。"""
 
     def __init__(self, max_rounds: int = 4):
-        self._store: dict[str, list[dict[str, str]]] = {}
         self.max_rounds = max_rounds
 
-    def add(self, student_id: str, role: str, content: str) -> None:
-        if student_id not in self._store:
-            self._store[student_id] = []
-        self._store[student_id].append({"role": role, "content": content})
-        if len(self._store[student_id]) > self.max_rounds * 2:
-            self._store[student_id] = self._store[student_id][-(self.max_rounds * 2):]
+    def add(self, student_id: str, role: str, content: str, mode: str = "rag") -> None:
+        save_conversation(student_id, role, content, mode)
 
     def get_history(self, student_id: str) -> list[dict[str, str]]:
-        return self._store.get(student_id, [])
+        records = get_conversation_history(student_id, limit=self.max_rounds * 2)
+        return [{"role": r["role"], "content": r["content"]} for r in records]
 
     def clear(self, student_id: str) -> None:
-        self._store.pop(student_id, None)
+        clear_conversation_history(student_id)
 
 
 _conversation_memory = ConversationMemory()
@@ -240,6 +242,7 @@ async def ask(request: AskRequest) -> AskResponse:
 
         _conversation_memory.add(student_id, "user", question)
         _conversation_memory.add(student_id, "assistant", answer)
+        log_interaction(student_id, question, answer, mode, auto_generated, tools_used)
 
         return AskResponse(
             answer=answer,
@@ -294,7 +297,8 @@ async def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
         answer = _mark_auto_generated(response.content.strip(), auto_generated)
 
         _conversation_memory.add(student_id, "user", question)
-        _conversation_memory.add(student_id, "assistant", answer)
+        _conversation_memory.add(student_id, "assistant", answer, mode)
+        log_interaction(student_id, question, answer, mode, auto_generated, tools_used)
 
         return AskWithToolsResponse(
             answer=answer,
@@ -345,7 +349,8 @@ async def _stream_answer(question: str, student_id: str):
 
     final_answer = _mark_auto_generated(full_answer.strip(), auto_generated)
     _conversation_memory.add(student_id, "user", question)
-    _conversation_memory.add(student_id, "assistant", final_answer)
+    _conversation_memory.add(student_id, "assistant", final_answer, mode)
+    log_interaction(student_id, question, final_answer, mode, auto_generated, tools_used)
 
     yield f"data: {json.dumps({'event': 'done'})}\n\n"
 

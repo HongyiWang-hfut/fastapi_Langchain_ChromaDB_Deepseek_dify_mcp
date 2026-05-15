@@ -7,9 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-# Mock API keys before importing app
+# Mock API keys and use temp file DB before importing app
+import tempfile
+
 os.environ.setdefault("DEEPSEEK_API_KEY", "sk-test-key")
 os.environ.setdefault("DASHSCOPE_API_KEY", "sk-test-key")
+os.environ.setdefault("CAMPUS_QA_DATABASE_URL", f"sqlite:///{tempfile.mktemp(suffix='.db')}")
 
 from app.main import app
 
@@ -20,8 +23,9 @@ client = TestClient(app)
 def _reset_memory():
     """每个测试前重置对话记忆。"""
     from app.main import _conversation_memory
+    from database import clear_conversation_history
 
-    _conversation_memory._store.clear()
+    clear_conversation_history("S001")
     yield
 
 

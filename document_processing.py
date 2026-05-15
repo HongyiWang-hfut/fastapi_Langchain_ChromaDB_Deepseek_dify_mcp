@@ -46,8 +46,8 @@ def load_campus_documents(data_dir: str | Path = "data") -> list[Document]:
 def split_campus_documents(
     documents: list[Document],
     *,
-    chunk_size: int = 100,
-    chunk_overlap: int = 10,
+    chunk_size: int = 700,
+    chunk_overlap: int = 150,
 ) -> list[Document]:
     """对 ``documents`` 做递归字符切分，便于定长向量化。"""
     splitter = RecursiveCharacterTextSplitter(  # LangChain 内置分段策略
@@ -60,8 +60,8 @@ def split_campus_documents(
 def load_and_split_campus_documents(
     data_dir: str | Path = "data",
     *,
-    chunk_size: int = 100,
-    chunk_overlap: int = 10,
+    chunk_size: int = 700,
+    chunk_overlap: int = 150,
     verbose: bool = True,
 ) -> tuple[list[Document], list[Document]]:
     """读盘 → 切分；返回 (原文档列表, 文本块列表)，可选打印数量。"""

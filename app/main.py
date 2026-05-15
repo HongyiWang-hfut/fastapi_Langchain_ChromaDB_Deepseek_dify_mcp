@@ -16,13 +16,14 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
+from config.intent_classifier import IntentClassifier
 from config.prompts import (
     AUTO_GENERATED_TEMPLATE,
     MCP_USER_TEMPLATE,
     RAG_USER_TEMPLATE,
     SYSTEM_PROMPT,
 )
-from vector_store import load_or_rebuild_campus_chroma, retrieve_top_chunks
+from vector_store import create_project_embeddings, load_or_rebuild_campus_chroma, retrieve_top_chunks
 
 
 class ConversationMemory:
@@ -55,7 +56,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 app = FastAPI(
     title="Campus Smart Q&A Assistant",
     description="Campus Q&A with RAG + MCP + auto-generated fallback",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 if FRONTEND_DIR.exists():
@@ -121,69 +122,47 @@ def _get_mcp_client():
     return MCPClient(PROJECT_ROOT / "mcp_server.py")
 
 
-def _should_use_tools(question: str) -> bool:
-    """判断问题是否应该调用工具。"""
-    keywords = ["课表", "课程", "上课", "借书", "借阅", "图书馆", "教室", "房间", "自习室",
-                  "食堂", "菜单", "吃饭", "校车", "班车", "报修", "维修", "宿舍"]
-    return any(kw in question for kw in keywords)
+@lru_cache
+def _get_intent_classifier():
+    """初始化基于 Embedding 的意图分类器。"""
+    embeddings = create_project_embeddings(allow_demo_fallback=True)[0]
+    return IntentClassifier(embeddings)
 
 
-async def _call_tools_for_question(question: str, student_id: str = "S001") -> dict[str, str]:
-    """根据问题调用相应的工具，收集结果。"""
-    try:
-        mcp_client = _get_mcp_client()
-        results: dict[str, str] = {}
+async def _call_tools_for_intent(intent: str | None, question: str, student_id: str = "S001") -> dict[str, str]:
+    """根据分类后的意图调用对应工具。"""
+    if intent is None:
+        return {}
 
-        if any(kw in question for kw in ["课表", "课程", "上课"]):
-            try:
-                course_data = await mcp_client.call_tool("get_course_schedule", student_id=student_id)
-                results["课表数据"] = str(course_data)
-            except Exception as exc:
-                results["课表数据"] = f"获取失败: {exc}"
+    mcp_client = _get_mcp_client()
+    results: dict[str, str] = {}
+    intent_to_tool: dict[str, list[tuple[str, dict]]] = {
+        "课表": [("get_course_schedule", {"student_id": student_id})],
+        "借阅": [("get_library_status", {"student_id": student_id})],
+        "教室": [("query_room_availability", {"room_id": "教学楼 101"})],
+        "食堂": [("get_cafeteria_menu", {})],
+        "校车": [("get_bus_schedule", {})],
+        "报修": [("submit_maintenance_request", {"student_id": student_id, "location": question, "description": question})],
+    }
 
-        if any(kw in question for kw in ["借书", "借阅", "图书馆"]):
-            try:
-                library_data = await mcp_client.call_tool("get_library_status", student_id=student_id)
-                results["借阅数据"] = str(library_data)
-            except Exception as exc:
-                results["借阅数据"] = f"获取失败: {exc}"
+    tool_calls = intent_to_tool.get(intent, [])
+    for tool_name, kwargs in tool_calls:
+        label_map = {
+            "get_course_schedule": "课表数据",
+            "get_library_status": "借阅数据",
+            "query_room_availability": "教室数据",
+            "get_cafeteria_menu": "食堂菜单",
+            "get_bus_schedule": "校车时刻",
+            "submit_maintenance_request": "报修结果",
+        }
+        label = label_map.get(tool_name, tool_name)
+        try:
+            data = await mcp_client.call_tool(tool_name, **kwargs)
+            results[label] = str(data)
+        except Exception as exc:
+            results[label] = f"获取失败: {exc}"
 
-        if any(kw in question for kw in ["教室", "房间", "自习室"]):
-            try:
-                room_data = await mcp_client.call_tool("query_room_availability", room_id="教学楼 101")
-                results["教室数据"] = str(room_data)
-            except Exception as exc:
-                results["教室数据"] = f"获取失败: {exc}"
-
-        if any(kw in question for kw in ["食堂", "菜单", "吃饭"]):
-            try:
-                menu_data = await mcp_client.call_tool("get_cafeteria_menu")
-                results["食堂菜单"] = str(menu_data)
-            except Exception as exc:
-                results["食堂菜单"] = f"获取失败: {exc}"
-
-        if any(kw in question for kw in ["校车", "班车"]):
-            try:
-                bus_data = await mcp_client.call_tool("get_bus_schedule")
-                results["校车时刻"] = str(bus_data)
-            except Exception as exc:
-                results["校车时刻"] = f"获取失败: {exc}"
-
-        if any(kw in question for kw in ["报修", "维修"]):
-            try:
-                repair_data = await mcp_client.call_tool(
-                    "submit_maintenance_request",
-                    student_id=student_id,
-                    location=question,
-                    description=question,
-                )
-                results["报修结果"] = str(repair_data)
-            except Exception as exc:
-                results["报修结果"] = f"获取失败: {exc}"
-
-        return results
-    except Exception as exc:
-        return {"error": f"工具调用失败: {exc}"}
+    return results
 
 
 def _mark_auto_generated(answer: str, auto_generated: bool) -> str:
@@ -203,14 +182,18 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
     auto_generated = False
     mode = "rag"
 
-    if _should_use_tools(question):
-        tool_results = await _call_tools_for_question(question, student_id)
-        if tool_results and "error" not in tool_results:
+    # Step 1: MCP 工具调用（基于 Embedding 意图分类）
+    classifier = _get_intent_classifier()
+    intent = classifier.classify(question)
+    if intent:
+        tool_results = await _call_tools_for_intent(intent, question, student_id)
+        if tool_results:
             tools_used = list(tool_results.keys())
             tool_context = "\n".join([f"【{k}】\n{v}" for k, v in tool_results.items()])
             llm_prompt = MCP_USER_TEMPLATE.format(tool_context=tool_context, question=question)
             return llm_prompt, tools_used, tool_results, auto_generated, "mcp"
 
+    # Step 2: RAG 向量检索
     vectorstore = _get_vectorstore()
     hits = await asyncio.to_thread(
         retrieve_top_chunks,
@@ -225,6 +208,7 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
         mode = "auto"
         return AUTO_GENERATED_TEMPLATE.format(question=question), tools_used, tool_results, auto_generated, mode
 
+    # Step 3: RAG 命中
     context_text = "\n\n".join(f"{idx + 1}. {hit['content']}" for idx, hit in enumerate(hits))
     return RAG_USER_TEMPLATE.format(context=context_text, question=question), tools_used, tool_results, auto_generated, mode
 

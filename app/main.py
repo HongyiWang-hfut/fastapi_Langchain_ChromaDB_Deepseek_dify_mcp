@@ -16,6 +16,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
+from config.prompts import (
+    AUTO_GENERATED_TEMPLATE,
+    MCP_USER_TEMPLATE,
+    RAG_USER_TEMPLATE,
+    SYSTEM_PROMPT,
+)
 from vector_store import load_or_rebuild_campus_chroma, retrieve_top_chunks
 
 
@@ -69,25 +75,6 @@ async def index() -> FileResponse:
 async def health() -> dict[str, str]:
     """健康检查。"""
     return {"status": "ok"}
-
-
-ASK_SYSTEM_PROMPT = (
-    "你是校园问答助手，只能依据提供的资料回答。"
-    "如果有工具数据或检索资料，请优先依据它们回答。"
-    "如果明确提示没有可用资料，请允许基于一般常识回答，并在答案开头标注：自动生成。"
-    "如果仍然无法判断，请直接回答：我不知道。"
-)
-ASK_USER_TEMPLATE = (
-    "资料：\n{context}\n\n"
-    "问题：{question}\n\n"
-    "请基于资料给出简洁、准确的中文回答。"
-)
-AUTO_GENERATED_USER_TEMPLATE = (
-    "当前没有可用的工具数据，也没有检索到足够相关的资料。\n\n"
-    "问题：{question}\n\n"
-    "请基于一般常识尽量回答；如果你不确定，请明确说不知道。"
-    "你的回答必须以【自动生成】开头。"
-)
 
 
 class AskRequest(BaseModel):
@@ -221,12 +208,7 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
         if tool_results and "error" not in tool_results:
             tools_used = list(tool_results.keys())
             tool_context = "\n".join([f"【{k}】\n{v}" for k, v in tool_results.items()])
-            llm_prompt = (
-                "你是校园智能助手。根据以下实时数据回答用户的问题。\n\n"
-                f"实时数据：\n{tool_context}\n\n"
-                f"用户问题：{question}\n\n"
-                "请用简洁、准确的中文回答，基于提供的实时数据整理信息。"
-            )
+            llm_prompt = MCP_USER_TEMPLATE.format(tool_context=tool_context, question=question)
             return llm_prompt, tools_used, tool_results, auto_generated, "mcp"
 
     vectorstore = _get_vectorstore()
@@ -241,10 +223,10 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
     if not hits:
         auto_generated = True
         mode = "auto"
-        return AUTO_GENERATED_USER_TEMPLATE.format(question=question), tools_used, tool_results, auto_generated, mode
+        return AUTO_GENERATED_TEMPLATE.format(question=question), tools_used, tool_results, auto_generated, mode
 
     context_text = "\n\n".join(f"{idx + 1}. {hit['content']}" for idx, hit in enumerate(hits))
-    return ASK_USER_TEMPLATE.format(context=context_text, question=question), tools_used, tool_results, auto_generated, mode
+    return RAG_USER_TEMPLATE.format(context=context_text, question=question), tools_used, tool_results, auto_generated, mode
 
 
 @app.post("/ask", response_model=AskResponse)
@@ -260,7 +242,7 @@ async def ask(request: AskRequest) -> AskResponse:
             question, student_id
         )
         history = _conversation_memory.get_history(student_id)
-        messages = [SystemMessage(content=ASK_SYSTEM_PROMPT)]
+        messages = [SystemMessage(content=SYSTEM_PROMPT)]
         for h in history:
             if h["role"] == "user":
                 messages.append(HumanMessage(content=h["content"]))
@@ -315,7 +297,7 @@ async def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
             question, student_id
         )
         history = _conversation_memory.get_history(student_id)
-        messages = [SystemMessage(content=ASK_SYSTEM_PROMPT)]
+        messages = [SystemMessage(content=SYSTEM_PROMPT)]
         for h in history:
             if h["role"] == "user":
                 messages.append(HumanMessage(content=h["content"]))
@@ -362,7 +344,7 @@ async def _stream_answer(question: str, student_id: str):
     yield f"data: {json.dumps({'event': 'meta', 'mode': mode, 'auto_generated': auto_generated, 'tools_used': tools_used})}\n\n"
 
     history = _conversation_memory.get_history(student_id)
-    messages = [SystemMessage(content=ASK_SYSTEM_PROMPT)]
+    messages = [SystemMessage(content=SYSTEM_PROMPT)]
     for h in history:
         if h["role"] == "user":
             messages.append(HumanMessage(content=h["content"]))

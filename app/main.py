@@ -111,7 +111,8 @@ def _get_mcp_client():
 
 def _should_use_tools(question: str) -> bool:
     """判断问题是否应该调用工具。"""
-    keywords = ["课表", "课程", "上课", "借书", "借阅", "图书馆", "教室", "房间", "自习室"]
+    keywords = ["课表", "课程", "上课", "借书", "借阅", "图书馆", "教室", "房间", "自习室",
+                  "食堂", "菜单", "吃饭", "校车", "班车", "报修", "维修", "宿舍"]
     return any(kw in question for kw in keywords)
 
 
@@ -141,6 +142,32 @@ async def _call_tools_for_question(question: str, student_id: str = "S001") -> d
                 results["教室数据"] = str(room_data)
             except Exception as exc:
                 results["教室数据"] = f"获取失败: {exc}"
+
+        if any(kw in question for kw in ["食堂", "菜单", "吃饭"]):
+            try:
+                menu_data = await mcp_client.call_tool("get_cafeteria_menu")
+                results["食堂菜单"] = str(menu_data)
+            except Exception as exc:
+                results["食堂菜单"] = f"获取失败: {exc}"
+
+        if any(kw in question for kw in ["校车", "班车"]):
+            try:
+                bus_data = await mcp_client.call_tool("get_bus_schedule")
+                results["校车时刻"] = str(bus_data)
+            except Exception as exc:
+                results["校车时刻"] = f"获取失败: {exc}"
+
+        if any(kw in question for kw in ["报修", "维修"]):
+            try:
+                repair_data = await mcp_client.call_tool(
+                    "submit_maintenance_request",
+                    student_id=student_id,
+                    location=question,
+                    description=question,
+                )
+                results["报修结果"] = str(repair_data)
+            except Exception as exc:
+                results["报修结果"] = f"获取失败: {exc}"
 
         return results
     except Exception as exc:

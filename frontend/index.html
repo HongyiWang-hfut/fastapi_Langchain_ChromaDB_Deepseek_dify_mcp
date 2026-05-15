@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campus Smart Q&A</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <main class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-badge">C</div>
+          <div>
+            <h1>Campus AI</h1>
+            <p>RAG · MCP · Auto Generate</p>
+          </div>
+        </div>
+
+        <div class="nav-card">
+          <button class="nav-item active" data-preset="我的课表是什么？">课表</button>
+          <button class="nav-item" data-preset="图书馆总馆开放时间是什么？">图书馆</button>
+          <button class="nav-item" data-preset="教学楼 101 什么时候空闲？">教室</button>
+          <button class="nav-item" data-preset="请用一句话介绍你的能力">自动生成</button>
+        </div>
+
+        <div class="status-card">
+          <div class="section-title">服务状态</div>
+          <div class="status-list">
+            <div><span class="dot ok"></span><span>FastAPI 在线</span></div>
+            <div><span class="dot ok" id="mcp-dot"></span><span>MCP 待检测</span></div>
+            <div><span class="dot ok" id="rag-dot"></span><span>RAG 待检测</span></div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="hero">
+          <div>
+            <div class="eyebrow">简约时尚 · 校园智能助手</div>
+            <h2>把课表、图书馆、教室和校园知识放在一个对话框里</h2>
+            <p>自动先用 MCP 工具，再走 RAG，最后可自动生成并标注答案。</p>
+          </div>
+          <div class="hero-badges">
+            <span class="chip">MCP</span>
+            <span class="chip">RAG</span>
+            <span class="chip accent">自动生成</span>
+          </div>
+        </header>
+
+        <div class="chat-card">
+          <div class="controls">
+            <label>
+              接口
+              <select id="endpoint">
+                <option value="/ask">/ask（自动路由）</option>
+                <option value="/ask_with_tools">/ask_with_tools（显示工具详情）</option>
+              </select>
+            </label>
+
+            <label>
+              学生 ID
+              <input id="student-id" type="text" value="S001" maxlength="16" />
+            </label>
+          </div>
+
+          <div id="messages" class="messages">
+            <div class="message assistant">
+              <div class="avatar">AI</div>
+              <div class="bubble">
+                你好，我可以帮你查课表、图书馆、教室，也可以回答校园资料问题。
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <textarea id="question" rows="3" placeholder="例如：我的课表是什么？ / 图书馆总馆开放时间是什么？ / 说一句你自己的介绍"></textarea>
+            <div class="composer-actions">
+              <div class="quick-actions">
+                <button class="ghost-btn" data-preset="我的课表是什么？">课表测试</button>
+                <button class="ghost-btn" data-preset="图书馆总馆开放时间是什么？">图书馆测试</button>
+                <button class="ghost-btn" data-preset="教学楼 101 什么时候空闲？">教室测试</button>
+                <button class="ghost-btn" data-preset="请用一句话介绍你的能力">自动生成测试</button>
+              </div>
+              <button id="send-btn" class="send-btn">发送</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="info-card">
+          <div class="section-title">本次回答</div>
+          <div class="kv"><span>模式</span><strong id="mode-tag">未请求</strong></div>
+          <div class="kv"><span>自动生成</span><strong id="auto-tag">-</strong></div>
+          <div class="kv"><span>使用工具</span><strong id="tools-tag">-</strong></div>
+        </div>
+
+        <div class="info-card">
+          <div class="section-title">工具结果</div>
+          <pre id="tool-results" class="code-box">等待请求...</pre>
+        </div>
+
+        <div class="info-card">
+          <div class="section-title">命中说明</div>
+          <ul class="notes">
+            <li><span class="dot blue"></span> 工具调用优先</li>
+            <li><span class="dot purple"></span> 知识库检索兜底</li>
+            <li><span class="dot orange"></span> 自动生成会标注</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+  </body>
+</html>
+

@@ -9,13 +9,14 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
+from config.auth import verify_api_key
 from config.intent_classifier import IntentClassifier
 from database import (
     clear_conversation_history,
@@ -234,7 +235,7 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
 
 
 @app.post("/ask", response_model=AskResponse)
-async def ask(request: AskRequest) -> AskResponse:
+async def ask(request: AskRequest, _auth=Depends(verify_api_key)) -> AskResponse:
     """主问答接口：自动 MCP -> RAG -> 自动生成（含多轮对话记忆）。"""
     question = request.question.strip()
     student_id = request.student_id.strip() or "S001"
@@ -289,7 +290,7 @@ class AskWithToolsResponse(BaseModel):
 
 
 @app.post("/ask_with_tools", response_model=AskWithToolsResponse)
-async def ask_with_tools(request: AskWithToolsRequest) -> AskWithToolsResponse:
+async def ask_with_tools(request: AskWithToolsRequest, _auth=Depends(verify_api_key)) -> AskWithToolsResponse:
     """工具感知问答接口，保留给需要显式查看工具结果的页面使用。"""
     question = request.question.strip()
     student_id = request.student_id.strip() or "S001"
@@ -336,7 +337,7 @@ class ResetRequest(BaseModel):
 
 
 @app.post("/reset")
-async def reset_conversation(request: ResetRequest) -> dict[str, str]:
+async def reset_conversation(request: ResetRequest, _auth=Depends(verify_api_key)) -> dict[str, str]:
     """清除指定学生 ID 的对话历史。"""
     _conversation_memory.clear(request.student_id)
     return {"status": "ok", "message": f"已清除 {request.student_id} 的对话历史"}
@@ -374,7 +375,7 @@ async def _stream_answer(question: str, student_id: str):
 
 
 @app.post("/ask/stream")
-async def ask_stream(request: AskRequest) -> StreamingResponse:
+async def ask_stream(request: AskRequest, _auth=Depends(verify_api_key)) -> StreamingResponse:
     """流式问答接口：SSE 格式返回，适合前端流式展示。"""
     question = request.question.strip()
     student_id = request.student_id.strip() or "S001"

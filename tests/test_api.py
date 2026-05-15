@@ -17,6 +17,8 @@ os.environ.setdefault("CAMPUS_QA_DATABASE_URL", f"sqlite:///{tempfile.mktemp(suf
 from app.main import app
 
 client = TestClient(app)
+# 所有测试请求默认带上 API Key（除显式测试未认证的场景）
+client.headers["X-API-Key"] = "campus-qa-dev-key"
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +36,30 @@ class TestHealth:
         resp = client.get("/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+
+class TestAuth:
+    def test_ask_without_key_returns_401(self):
+        resp = TestClient(app).post("/ask", json={"question": "hi"})
+        assert resp.status_code == 401
+
+    def test_ask_with_wrong_key_returns_401(self):
+        bad_client = TestClient(app)
+        bad_client.headers["X-API-Key"] = "wrong-key"
+        resp = bad_client.post("/ask", json={"question": "hi"})
+        assert resp.status_code == 401
+
+    def test_ask_stream_without_key_returns_401(self):
+        resp = TestClient(app).post("/ask/stream", json={"question": "hi"})
+        assert resp.status_code == 401
+
+    def test_reset_without_key_returns_401(self):
+        resp = TestClient(app).post("/reset", json={})
+        assert resp.status_code == 401
+
+    def test_health_public_no_key_required(self):
+        resp = TestClient(app).get("/health")
+        assert resp.status_code == 200
 
 
 class TestAskEndpoint:

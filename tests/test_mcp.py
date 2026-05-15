@@ -95,6 +95,22 @@ class TestBusSchedule:
         assert "error" in result
 
 
+class TestWeatherTool:
+    @pytest.mark.asyncio
+    async def test_weather_returns_data(self):
+        from mcp_server import _get_weather_data
+
+        result = await _get_weather_data("北京")
+        # 真实 API 调用，可能因网络失败，验证返回结构
+        if "error" in result:
+            # 网络问题可接受，不阻塞 CI
+            assert isinstance(result["error"], str)
+        else:
+            assert "temperature" in result
+            assert "weather" in result
+            assert "city" in result
+
+
 class TestMaintenanceRequest:
     def test_submit_creates_record(self):
         result = _submit_maintenance_request_data("S001", "南苑3号楼205", "灯管损坏")

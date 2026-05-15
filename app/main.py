@@ -162,6 +162,7 @@ async def _call_tools_for_intent(intent: str | None, question: str, student_id: 
         "教室": [("query_room_availability", {"room_id": "教学楼 101"})],
         "食堂": [("get_cafeteria_menu", {})],
         "校车": [("get_bus_schedule", {})],
+        "天气": [("get_weather", {"city": question.replace("天气", "").replace("怎么样", "").replace("今天", "").replace("明天", "").strip() or "北京"})],
         "报修": [("submit_maintenance_request", {"student_id": student_id, "location": question, "description": question})],
     }
 

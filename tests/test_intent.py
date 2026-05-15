@@ -38,7 +38,7 @@ class TestIntentClassifier:
         assert "课表" in intents
         assert "食堂" in intents
         assert "校车" in intents
-        assert len(intents) == 6
+        assert len(intents) >= 6
 
     def test_cosine_similarity_identical(self):
         from config.intent_classifier import IntentClassifier

@@ -1,8 +1,9 @@
-"""MCP Server：使用官方 MCP SDK 暴露校园工具。"""
+"""MCP Server：使用官方 MCP SDK 暴露校园工具（含真实天气 API）。"""
 
 import hashlib
 from typing import Any
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 
 # ============================================================================
@@ -137,6 +138,69 @@ def _get_bus_schedule_data(route_id: str | None = None) -> dict[str, Any]:
     return {"schedules": BUS_SCHEDULE, "total_routes": len(BUS_SCHEDULE)}
 
 
+async def _get_weather_data(city: str = "北京") -> dict[str, Any]:
+    """调用 Open-Meteo 免费 API 获取实时天气（无需 API Key）。"""
+    try:
+        # Step 1: 地理编码获取城市坐标
+        async with httpx.AsyncClient(timeout=10) as client:
+            geo_resp = await client.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": city, "count": 1, "language": "zh", "format": "json"},
+            )
+            geo_resp.raise_for_status()
+            geo_data = geo_resp.json()
+            if not geo_data.get("results"):
+                return {"error": f"未找到城市：{city}"}
+
+            loc = geo_data["results"][0]
+            lat, lng = loc["latitude"], loc["longitude"]
+            city_name = loc.get("name", city)
+            country = loc.get("country", "")
+
+            # Step 2: 获取天气数据
+            weather_resp = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lng,
+                    "current": "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
+                    "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+                    "timezone": "Asia/Shanghai",
+                    "forecast_days": 1,
+                },
+            )
+            weather_resp.raise_for_status()
+            w = weather_resp.json()
+
+            # 天气代码映射（WMO Weather interpretation codes）
+            weather_codes: dict[int, str] = {
+                0: "晴天", 1: "大部晴朗", 2: "多云", 3: "阴天",
+                45: "雾", 48: "雾凇", 51: "小毛毛雨", 53: "中毛毛雨",
+                55: "大毛毛雨", 61: "小雨", 63: "中雨", 65: "大雨",
+                71: "小雪", 73: "中雪", 75: "大雪", 80: "小阵雨",
+                81: "中阵雨", 82: "大阵雨", 95: "雷暴",
+            }
+            code = w.get("current", {}).get("weather_code", 0)
+            weather_desc = weather_codes.get(code, f"未知({code})")
+
+            current = w.get("current", {})
+            daily = w.get("daily", {})
+
+            return {
+                "city": city_name,
+                "country": country,
+                "temperature": current.get("temperature_2m"),
+                "apparent_temperature": current.get("apparent_temperature"),
+                "humidity": current.get("relative_humidity_2m"),
+                "weather": weather_desc,
+                "wind_speed": current.get("wind_speed_10m"),
+                "high": daily.get("temperature_2m_max", [None])[0] if daily.get("temperature_2m_max") else None,
+                "low": daily.get("temperature_2m_min", [None])[0] if daily.get("temperature_2m_min") else None,
+            }
+    except Exception as exc:
+        return {"error": f"天气查询失败: {exc}"}
+
+
 def _submit_maintenance_request_data(student_id: str, location: str, description: str) -> dict[str, Any]:
     """提交宿舍报修请求。"""
     request_id = f"MNT-{hashlib.md5(f'{student_id}{location}{description}'.encode()).hexdigest()[:8].upper()}"
@@ -181,6 +245,11 @@ def get_cafeteria_menu(canteen: str | None = None) -> dict[str, Any]:
 @mcp.tool(description="查询校车时刻表，不指定路线则返回所有")
 def get_bus_schedule(route_id: str | None = None) -> dict[str, Any]:
     return _get_bus_schedule_data(route_id)
+
+
+@mcp.tool(description="查询实时天气（调用 Open-Meteo 真实 API）")
+async def get_weather(city: str = "北京") -> dict[str, Any]:
+    return await _get_weather_data(city)
 
 
 @mcp.tool(description="提交宿舍报修请求")

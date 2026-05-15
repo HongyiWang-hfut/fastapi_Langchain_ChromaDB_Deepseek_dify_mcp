@@ -25,6 +25,8 @@
           <button class="nav-item active" data-preset="我的课表是什么？">课表</button>
           <button class="nav-item" data-preset="图书馆总馆开放时间是什么？">图书馆</button>
           <button class="nav-item" data-preset="教学楼 101 什么时候空闲？">教室</button>
+          <button class="nav-item" data-preset="今天食堂有什么推荐的？">食堂</button>
+          <button class="nav-item" data-preset="校车路线和时刻是怎样的？">校车</button>
           <button class="nav-item" data-preset="请用一句话介绍你的能力">自动生成</button>
         </div>
 
@@ -36,19 +38,29 @@
             <div><span class="dot ok" id="rag-dot"></span><span>RAG 待检测</span></div>
           </div>
         </div>
+
+        <div class="status-card">
+          <div class="section-title">对话记忆</div>
+          <div class="status-list">
+            <div><span>当前轮数</span><strong id="memory-count">0</strong></div>
+            <div><span>学生 ID</span><strong id="current-sid">S001</strong></div>
+          </div>
+          <button id="reset-btn" class="ghost-btn" style="width:100%;margin-top:12px;text-align:center">重置对话</button>
+        </div>
       </aside>
 
       <section class="workspace">
         <header class="hero">
           <div>
             <div class="eyebrow">简约时尚 · 校园智能助手</div>
-            <h2>把课表、图书馆、教室和校园知识放在一个对话框里</h2>
-            <p>自动先用 MCP 工具，再走 RAG，最后可自动生成并标注答案。</p>
+            <h2>把课表、图书馆、食堂、校车和校园知识放在一个对话框里</h2>
+            <p>自动先用 MCP 工具，再走 RAG，最后可自动生成并标注答案。支持流式输出与多轮对话。</p>
           </div>
           <div class="hero-badges">
             <span class="chip">MCP</span>
             <span class="chip">RAG</span>
-            <span class="chip accent">自动生成</span>
+            <span class="chip accent">流式输出</span>
+            <span class="chip accent">多轮对话</span>
           </div>
         </header>
 
@@ -57,8 +69,9 @@
             <label>
               接口
               <select id="endpoint">
-                <option value="/ask">/ask（自动路由）</option>
+                <option value="/ask">/ask（标准）</option>
                 <option value="/ask_with_tools">/ask_with_tools（显示工具详情）</option>
+                <option value="/ask/stream">/ask/stream（流式输出）</option>
               </select>
             </label>
 
@@ -72,13 +85,13 @@
             <div class="message assistant">
               <div class="avatar">AI</div>
               <div class="bubble">
-                你好，我可以帮你查课表、图书馆、教室，也可以回答校园资料问题。
+                你好，我可以帮你查课表、图书馆、食堂、校车、教室，也可以回答校园资料问题。试试流式输出模式，看逐字输出效果！
               </div>
             </div>
           </div>
 
           <div class="composer">
-            <textarea id="question" rows="3" placeholder="例如：我的课表是什么？ / 图书馆总馆开放时间是什么？ / 说一句你自己的介绍"></textarea>
+            <textarea id="question" rows="3" placeholder="例如：我的课表是什么？ / 图书馆总馆开放时间是什么？ / 今天食堂有什么好吃的？"></textarea>
             <div class="composer-actions">
               <div class="quick-actions">
                 <button class="ghost-btn" data-preset="我的课表是什么？">课表测试</button>
@@ -117,4 +130,3 @@
     </main>
   </body>
 </html>
-

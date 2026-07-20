@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from functools import lru_cache
@@ -99,8 +100,32 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# 修复 Windows 下 Starlette StaticFiles 把 .webp / .js 误判为 text/plain 的问题
+# （会导致浏览器拒绝渲染图片、预览 webview 直接拒绝加载脚本，页面"打不开"）
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/javascript", ".mjs")
+
+
+class AppStaticFiles(StaticFiles):
+    """兜底覆盖：无论系统 mimetypes 是否识别，强制返回正确 Content-Type。
+
+    Starlette 1.0.0 中 file_response 是【同步】方法，直接返回 Response 对象
+    （不再是协程）；签名 (full_path, stat_result, scope, status_code=200)。
+    """
+
+    _MIME = {".webp": "image/webp", ".js": "text/javascript", ".mjs": "text/javascript"}
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        suffix = os.path.splitext(full_path)[1].lower()  # 1.0.0 中 full_path 是 str
+        if suffix in self._MIME:
+            response.media_type = self._MIME[suffix]
+        return response
+
+
 if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+    app.mount("/static", AppStaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
 @app.get("/", include_in_schema=False)

@@ -176,9 +176,13 @@ def _get_mcp_client():
 
 @lru_cache
 def _get_intent_classifier():
-    """初始化基于 Embedding 的意图分类器。"""
+    """初始化基于 Embedding 的意图分类器（含预计算）。"""
     embeddings = create_project_embeddings(allow_demo_fallback=True)[0]
-    return IntentClassifier(embeddings)
+    clf = IntentClassifier(embeddings)
+    # 预计算所有意图示例的嵌入向量（~40 次 DashScope 调用），
+    # 避免首次 classify 时懒加载阻塞请求。
+    clf.build()
+    return clf
 
 
 async def _call_tools_for_intent(intent: str | None, question: str, student_id: str = "S001") -> dict[str, str]:

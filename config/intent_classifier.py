@@ -85,15 +85,37 @@ class IntentClassifier:
         self._built = False
 
     def build(self) -> None:
-        """将所有示例文本预向量化。"""
+        """将所有示例文本预向量化（批量调用以减少 API 往返）。
+
+        DashScope text-embedding-v2 单次最多 25 条文本。
+        原 40 次顺序 embed_query (~80s) 改为 2 次 embed_documents (~5s)。
+        """
+        # 收集所有示例文本，记录归属意图与位置
+        all_texts: list[str] = []
+        intent_slices: list[tuple[str, int, int]] = []  # (intent, start, count)
         for intent, examples in _INTENT_EXAMPLES.items():
-            self._tool_examples[intent] = [
-                self._embeddings.embed_query(ex) for ex in examples
-            ]
-        self._non_tool_vectors = [
-            self._embeddings.embed_query(ex) for ex in _NON_TOOL_EXAMPLES
-        ]
+            start = len(all_texts)
+            all_texts.extend(examples)
+            intent_slices.append((intent, start, len(examples)))
+        non_tool_start = len(all_texts)
+        all_texts.extend(_NON_TOOL_EXAMPLES)
+
+        # 批量嵌入（分批，每批 25 条）
+        all_vectors = self._batch_embed(all_texts)
+
+        # 按意图分组存储
+        for intent, start, count in intent_slices:
+            self._tool_examples[intent] = all_vectors[start:start + count]
+        self._non_tool_vectors = all_vectors[non_tool_start:]
         self._built = True
+
+    def _batch_embed(self, texts: list[str], batch_size: int = 25) -> list[list[float]]:
+        """分批调用 embed_documents，避免单次超限。"""
+        result: list[list[float]] = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            result.extend(self._embeddings.embed_documents(batch))
+        return result
 
     @staticmethod
     def _cosine_similarity(a: list[float], b: list[float]) -> float:

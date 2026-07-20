@@ -279,9 +279,11 @@ def retrieve_top_chunks(  # 相似度检索，返回最相关的文本片段
 class HybridRetriever:
     """混合检索：向量语义 + BM25 关键词，RRF 融合排序。"""
 
-    def __init__(self, vectorstore: Chroma, corpus: list[str] | None = None):
+    def __init__(self, vectorstore: Chroma, corpus: list[str] | None = None, metadatas: list[dict] | None = None):
         self.vectorstore = vectorstore
         self._corpus = corpus or []
+        self._metadatas = list(metadatas) if metadatas else [{} for _ in self._corpus]
+        self._content_to_idx = {doc: i for i, doc in enumerate(self._corpus)}
         self._bm25 = None
         if self._corpus:
             self._build_bm25()
@@ -320,54 +322,65 @@ class HybridRetriever:
         self,
         question: str,
         k: int = 3,
-        *,
-        vector_weight: float = 0.5,
         **vector_kwargs,
     ) -> list[dict[str, Any]]:
-        """混合检索：融合向量和 BM25 结果。"""
-        # 1. 向量检索
-        vector_hits = retrieve_top_chunks(
-            self.vectorstore, question, k=max(k * 3, 15), **vector_kwargs
-        )
-        if not vector_hits:
-            return []
+        """混合检索：向量与 BM25 在统一 corpus 索引空间各自召回后 RRF 融合。
 
-        # 2. BM25 检索
+        BM25 在完整语料上独立打分；向量命中映射回 corpus 索引；两者融合取前 k。
+        这样 BM25 独有的相关文档也能被召回，而不是退化成"只在向量结果里做融合"。
+        """
+        tokens = self._tokenize(question)
+
+        # 1. BM25 在完整 corpus 上独立召回
         bm25_scores: list[float] | None = None
+        bm25_indices: list[int] = []
         if self._bm25 is not None:
-            bm25_scores = self._bm25.get_scores(self._tokenize(question))
-            # 按 BM25 得分排序取前 k*3
+            bm25_scores = self._bm25.get_scores(tokens)
             bm25_indices = sorted(
-                range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True
+                range(len(self._corpus)), key=lambda i: bm25_scores[i], reverse=True
             )[: max(k * 3, 15)]
-        else:
-            bm25_indices = []
 
-        # 3. RRF 融合
-        vector_indices = list(range(len(vector_hits)))
-        rankings = [vector_indices]
+        # 2. 向量检索并映射回 corpus 索引
+        vec_hit_by_idx: dict[int, dict[str, Any]] = {}
+        if self._corpus:
+            vector_hits = retrieve_top_chunks(
+                self.vectorstore, question, k=max(k * 3, 15), **vector_kwargs
+            )
+            for h in vector_hits:
+                ci = self._content_to_idx.get(h["content"])
+                if ci is not None:
+                    vec_hit_by_idx[ci] = h
+
+        # 3. RRF 融合（向量与 BM25 各自给出 corpus 索引排名）
+        rankings: list[list[int]] = []
+        if vec_hit_by_idx:
+            rankings.append(list(vec_hit_by_idx.keys()))
         if bm25_indices:
             rankings.append(bm25_indices)
+        if not rankings:
+            return []
 
-        fused_indices = self._rrf(rankings)
+        fused = self._rrf(rankings)
 
-        # 4. 映射回结果
-        seen = set()
+        # 4. 组装结果（按融合排名去重，最多 k 个）
+        seen: set[int] = set()
         results: list[dict[str, Any]] = []
-        for idx in fused_indices:
-            if idx < len(vector_hits):
-                doc_id = vector_hits[idx].get("content", "")
-                if doc_id and doc_id not in seen:
-                    seen.add(doc_id)
-                    # 标注来源
-                    hit = dict(vector_hits[idx])
-                    if bm25_scores is not None and idx < len(bm25_scores):
-                        hit["bm25_score"] = float(bm25_scores[idx])
-                    hit["source"] = "hybrid"
-                    results.append(hit)
+        for idx in fused:
+            if idx < 0 or idx >= len(self._corpus) or idx in seen:
+                continue
+            seen.add(idx)
+            hit: dict[str, Any] = {
+                "content": self._corpus[idx],
+                "metadata": self._metadatas[idx] if idx < len(self._metadatas) else {},
+                "source": "hybrid",
+            }
+            if idx in vec_hit_by_idx:
+                hit["distance"] = vec_hit_by_idx[idx].get("distance")
+            if bm25_scores is not None and idx < len(bm25_scores):
+                hit["bm25_score"] = float(bm25_scores[idx])
+            results.append(hit)
             if len(results) >= k:
                 break
-
         return results
 
 

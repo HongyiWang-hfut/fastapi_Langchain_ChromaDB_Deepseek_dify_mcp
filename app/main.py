@@ -63,10 +63,39 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 load_dotenv(PROJECT_ROOT / ".env")
 
+logger = logging.getLogger("campus_qa")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """启动时预热重型组件，消除首请求卡死与事件循环阻塞。
+
+    意图分类器/向量库/混合检索器在首次使用时都要做同步阻塞 I/O
+    （数十次 Embedding 调用 + 加载 Chroma），如果在请求处理器里懒加载
+    会堵死事件循环导致首请求超时。这里在启动阶段用 asyncio.to_thread
+    在后台线程完成初始化。
+    """
+    logger.info("启动预热：开始初始化重型组件...")
+    try:
+        await asyncio.to_thread(_get_vectorstore)
+        logger.info("向量库就绪")
+        await asyncio.to_thread(_get_hybrid_retriever)
+        logger.info("混合检索器就绪")
+        await asyncio.to_thread(_get_intent_classifier)
+        logger.info("意图分类器就绪")
+        _get_mcp_client()
+        logger.info("MCP 客户端就绪")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("预热阶段出错（将在首请求时重试）: %s", exc)
+    yield
+    logger.info("应用关闭")
+
+
 app = FastAPI(
     title="Campus Smart Q&A Assistant",
     description="Campus Q&A with RAG + MCP + auto-generated fallback",
     version="0.4.0",
+    lifespan=lifespan,
 )
 
 if FRONTEND_DIR.exists():
@@ -183,9 +212,8 @@ async def _call_tools_for_intent(intent: str | None, question: str, student_id: 
         try:
             data = await asyncio.to_thread(mcp_client.call_tool_blocking, tool_name, **kwargs)
             results[label] = str(data)
-        except Exception as exc:
-            import traceback as _tb
-            _tb.print_exc()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("MCP 工具 %s 调用失败", tool_name)
             results[label] = f"获取失败: {exc}"
 
     return results
@@ -210,7 +238,7 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
 
     # Step 1: MCP 工具调用（基于 Embedding 意图分类）
     classifier = _get_intent_classifier()
-    intent = classifier.classify(question)
+    intent = await asyncio.to_thread(classifier.classify, question)
     if intent:
         tool_results = await _call_tools_for_intent(intent, question, student_id)
         if tool_results:
@@ -238,6 +266,34 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
     return RAG_USER_TEMPLATE.format(context=context_text, question=question), tools_used, tool_results, auto_generated, mode
 
 
+async def _answer_pipeline(question: str, student_id: str) -> tuple[str, str, bool, list[str], dict[str, str]]:
+    """统一问答管道：构建上下文 → 拼接多轮历史 → 调 LLM → 持久化。
+
+    /ask 与 /ask_with_tools 共用此管道，消除重复逻辑。
+    返回 (answer, mode, auto_generated, tools_used, tool_results)。
+    """
+    llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(
+        question, student_id
+    )
+    history = _conversation_memory.get_history(student_id)
+    messages = [SystemMessage(content=SYSTEM_PROMPT)]
+    for h in history:
+        if h["role"] == "user":
+            messages.append(HumanMessage(content=h["content"]))
+        else:
+            messages.append(SystemMessage(content=f"你之前的回答：{h['content']}"))
+    messages.append(HumanMessage(content=llm_prompt))
+
+    response = await _get_llm().ainvoke(messages)
+    answer = _mark_auto_generated(response.content.strip(), auto_generated)
+
+    _conversation_memory.add(student_id, "user", question, mode)
+    _conversation_memory.add(student_id, "assistant", answer, mode)
+    log_interaction(student_id, question, answer, mode, auto_generated, tools_used)
+
+    return answer, mode, auto_generated, tools_used, tool_results
+
+
 @app.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest, _auth=Depends(verify_api_key)) -> AskResponse:
     """主问答接口：自动 MCP -> RAG -> 自动生成（含多轮对话记忆）。"""
@@ -247,26 +303,7 @@ async def ask(request: AskRequest, _auth=Depends(verify_api_key)) -> AskResponse
         raise HTTPException(status_code=400, detail="question is required")
 
     try:
-        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(
-            question, student_id
-        )
-        history = _conversation_memory.get_history(student_id)
-        messages = [SystemMessage(content=SYSTEM_PROMPT)]
-        for h in history:
-            if h["role"] == "user":
-                messages.append(HumanMessage(content=h["content"]))
-            else:
-                messages.append(SystemMessage(content=f"你之前的回答：{h['content']}"))
-
-        messages.append(HumanMessage(content=llm_prompt))
-
-        response = await _get_llm().ainvoke(messages)
-        answer = _mark_auto_generated(response.content.strip(), auto_generated)
-
-        _conversation_memory.add(student_id, "user", question)
-        _conversation_memory.add(student_id, "assistant", answer)
-        log_interaction(student_id, question, answer, mode, auto_generated, tools_used)
-
+        answer, mode, auto_generated, tools_used, tool_results = await _answer_pipeline(question, student_id)
         return AskResponse(
             answer=answer,
             mode=mode,
@@ -298,31 +335,11 @@ async def ask_with_tools(request: AskWithToolsRequest, _auth=Depends(verify_api_
     """工具感知问答接口，保留给需要显式查看工具结果的页面使用。"""
     question = request.question.strip()
     student_id = request.student_id.strip() or "S001"
-
     if not question:
         raise HTTPException(status_code=400, detail="question is required")
 
     try:
-        llm_prompt, tools_used, tool_results, auto_generated, mode = await _build_context_prompt(
-            question, student_id
-        )
-        history = _conversation_memory.get_history(student_id)
-        messages = [SystemMessage(content=SYSTEM_PROMPT)]
-        for h in history:
-            if h["role"] == "user":
-                messages.append(HumanMessage(content=h["content"]))
-            else:
-                messages.append(SystemMessage(content=f"你之前的回答：{h['content']}"))
-
-        messages.append(HumanMessage(content=llm_prompt))
-
-        response = await _get_llm().ainvoke(messages)
-        answer = _mark_auto_generated(response.content.strip(), auto_generated)
-
-        _conversation_memory.add(student_id, "user", question)
-        _conversation_memory.add(student_id, "assistant", answer, mode)
-        log_interaction(student_id, question, answer, mode, auto_generated, tools_used)
-
+        answer, mode, auto_generated, tools_used, tool_results = await _answer_pipeline(question, student_id)
         return AskWithToolsResponse(
             answer=answer,
             mode=mode,

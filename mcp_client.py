@@ -1,5 +1,6 @@
 """MCP Client：使用官方 MCP SDK 通过 stdio 调用工具（原生异步）。"""
 
+import asyncio
 import json
 import os
 import sys
@@ -70,6 +71,18 @@ class MCPClient:
                 if getattr(result, "isError", False):
                     raise RuntimeError(f"MCP 工具执行失败: {tool_name}")
                 return self._extract_call_result(result)
+
+    def call_tool_blocking(self, tool_name: str, **kwargs) -> Any:
+        """同步阻塞版：在独立线程的独立事件循环里运行 MCP 调用。
+
+        用于隔离 uvicorn 主事件循环（Windows 下 ProactorEventLoop 与 MCP
+        stdio 子进程偶发 TaskGroup 崩溃 / 挂起），保证工具调用稳定。
+        """
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(self.call_tool(tool_name, **kwargs))
+        finally:
+            loop.close()
 
     def close(self):
         """兼容旧接口：SDK 方案按次创建会话，无需显式关闭。"""

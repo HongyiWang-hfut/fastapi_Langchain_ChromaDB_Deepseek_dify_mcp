@@ -130,11 +130,18 @@ if FRONTEND_DIR.exists():
 
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
-    """返回前端页面。"""
+    """返回前端页面。强防缓存，确保静态资源 cache-busting 版本生效。"""
     index_file = FRONTEND_DIR / "index.html"
     if not index_file.exists():
         raise HTTPException(status_code=500, detail="frontend index.html not found")
-    return FileResponse(index_file)
+    return FileResponse(
+        index_file,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/health")

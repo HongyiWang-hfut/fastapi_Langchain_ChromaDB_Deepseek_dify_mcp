@@ -3,13 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="description" content="合肥工业大学校园智能问答助手 — MCP 工具调用 + RAG 知识检索 + AI 自动生成，多模块工作台" />
     <title>合肥工业大学 · 校园智能问答工作台</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/style.css?v=0.8.1" />
     <!-- Markdown 渲染：marked + DOMPurify（离线时优雅降级为纯文本） -->
     <script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-    <script defer src="/static/app.js"></script>
+    <script defer src="/static/app.js?v=0.8.1"></script>
   </head>
   <body>
 
@@ -110,29 +113,29 @@
             <div class="carousel glass" id="carousel" aria-roledescription="carousel" aria-label="校园风光">
               <div class="carousel-track" id="carousel-track">
                 <figure class="slide active">
-                  <img src="/static/img/lake-1280.webp"
-                       srcset="/static/img/lake-768.webp 768w, /static/img/lake-1280.webp 1280w, /static/img/lake-1920.webp 1920w"
+                  <img src="/static/img/lake-1280.webp?v=0.8.1"
+                       srcset="/static/img/lake-768.webp?v=0.8.1 768w, /static/img/lake-1280.webp?v=0.8.1 1280w, /static/img/lake-1920.webp?v=0.8.1 1920w"
                        sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
                        alt="翡翠湖校区双子楼与天鹅湖" loading="eager" decoding="async" />
                   <figcaption class="slide-cap"><b>翡翠湖校区</b><span>双子楼 · 天鹅湖</span></figcaption>
                 </figure>
                 <figure class="slide">
-                  <img data-src="/static/img/stadium-1280.webp"
-                       data-srcset="/static/img/stadium-768.webp 768w, /static/img/stadium-1280.webp 1280w, /static/img/stadium-1920.webp 1920w"
+                  <img data-src="/static/img/stadium-1280.webp?v=0.8.1"
+                       data-srcset="/static/img/stadium-768.webp?v=0.8.1 768w, /static/img/stadium-1280.webp?v=0.8.1 1280w, /static/img/stadium-1920.webp?v=0.8.1 1920w"
                        sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
                        alt="体育馆塔楼晚霞" loading="lazy" decoding="async" />
                   <figcaption class="slide-cap"><b>体育中心</b><span>塔楼 · 晚霞</span></figcaption>
                 </figure>
                 <figure class="slide">
-                  <img data-src="/static/img/gate-1280.webp"
-                       data-srcset="/static/img/gate-768.webp 768w, /static/img/gate-1280.webp 1280w, /static/img/gate-1920.webp 1920w"
+                  <img data-src="/static/img/gate-1280.webp?v=0.8.1"
+                       data-srcset="/static/img/gate-768.webp?v=0.8.1 768w, /static/img/gate-1280.webp?v=0.8.1 1280w, /static/img/gate-1920.webp?v=0.8.1 1920w"
                        sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
                        alt="合肥工业大学老校门" loading="lazy" decoding="async" />
                   <figcaption class="slide-cap"><b>屯溪路校区</b><span>老校门 · 红砖主楼</span></figcaption>
                 </figure>
                 <figure class="slide">
-                  <img data-src="/static/img/library-1280.webp"
-                       data-srcset="/static/img/library-768.webp 768w, /static/img/library-1280.webp 1280w, /static/img/library-1920.webp 1920w"
+                  <img data-src="/static/img/library-1280.webp?v=0.8.1"
+                       data-srcset="/static/img/library-768.webp?v=0.8.1 768w, /static/img/library-1280.webp?v=0.8.1 1280w, /static/img/library-1920.webp?v=0.8.1 1920w"
                        sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
                        alt="图书馆夜景灯光倒影" loading="lazy" decoding="async" />
                   <figcaption class="slide-cap"><b>图书馆</b><span>夜景 · 湖畔倒影</span></figcaption>
@@ -338,8 +341,8 @@
             <div class="campus-grid">
               <figure class="campus-card glass" tabindex="0">
                 <div class="campus-img-wrap">
-                  <img data-src="/static/img/lake-1280.webp"
-                       data-srcset="/static/img/lake-768.webp 768w, /static/img/lake-1280.webp 1280w"
+                  <img data-src="/static/img/lake-1280.webp?v=0.8.1"
+                       data-srcset="/static/img/lake-768.webp?v=0.8.1 768w, /static/img/lake-1280.webp?v=0.8.1 1280w"
                        sizes="(max-width:768px) 100vw, 640px"
                        alt="翡翠湖校区双子楼与天鹅湖" loading="lazy" decoding="async" class="lazy-img" />
                 </div>
@@ -351,8 +354,8 @@
 
               <figure class="campus-card glass" tabindex="0">
                 <div class="campus-img-wrap">
-                  <img data-src="/static/img/stadium-1280.webp"
-                       data-srcset="/static/img/stadium-768.webp 768w, /static/img/stadium-1280.webp 1280w"
+                  <img data-src="/static/img/stadium-1280.webp?v=0.8.1"
+                       data-srcset="/static/img/stadium-768.webp?v=0.8.1 768w, /static/img/stadium-1280.webp?v=0.8.1 1280w"
                        sizes="(max-width:768px) 100vw, 640px"
                        alt="体育馆塔楼晚霞" loading="lazy" decoding="async" class="lazy-img" />
                 </div>
@@ -364,8 +367,8 @@
 
               <figure class="campus-card glass" tabindex="0">
                 <div class="campus-img-wrap">
-                  <img data-src="/static/img/gate-1280.webp"
-                       data-srcset="/static/img/gate-768.webp 768w, /static/img/gate-1280.webp 1280w"
+                  <img data-src="/static/img/gate-1280.webp?v=0.8.1"
+                       data-srcset="/static/img/gate-768.webp?v=0.8.1 768w, /static/img/gate-1280.webp?v=0.8.1 1280w"
                        sizes="(max-width:768px) 100vw, 640px"
                        alt="合肥工业大学老校门" loading="lazy" decoding="async" class="lazy-img" />
                 </div>
@@ -377,8 +380,8 @@
 
               <figure class="campus-card glass" tabindex="0">
                 <div class="campus-img-wrap">
-                  <img data-src="/static/img/library-1280.webp"
-                       data-srcset="/static/img/library-768.webp 768w, /static/img/library-1280.webp 1280w"
+                  <img data-src="/static/img/library-1280.webp?v=0.8.1"
+                       data-srcset="/static/img/library-768.webp?v=0.8.1 768w, /static/img/library-1280.webp?v=0.8.1 1280w"
                        sizes="(max-width:768px) 100vw, 640px"
                        alt="图书馆夜景灯光倒影" loading="lazy" decoding="async" class="lazy-img" />
                 </div>

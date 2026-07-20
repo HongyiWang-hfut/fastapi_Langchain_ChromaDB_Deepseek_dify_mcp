@@ -569,17 +569,27 @@ textarea{resize:vertical;min-height:84px}
 .seg-btn.active{background:var(--red);color:#fff}
 
 /* ==========================================================================
-   底部
+   底部 — 参考官网多列布局
    ========================================================================== */
-.site-footer{margin-top:auto;background:rgba(34,12,14,.96);backdrop-filter:blur(10px);border-bottom:8px solid var(--red-dark);padding:28px 0 24px}
+.site-footer{margin-top:auto;background:rgba(34,12,14,.96);backdrop-filter:blur(10px);border-bottom:8px solid var(--red-dark)}
 [data-theme="dark"] .site-footer{background:rgba(20,6,8,.96)}
-.footer-inner{max-width:1280px;margin:0 auto;padding:0 28px;display:flex;align-items:center;gap:36px;flex-wrap:wrap}
-.footer-brand{display:flex;flex-direction:column;gap:4px}
-.footer-brand b{font-family:var(--font-serif);font-size:1.2rem;color:#fff;position:relative;padding-bottom:10px}
-.footer-brand b::after{content:"";position:absolute;left:0;bottom:0;width:48px;height:4px;background:var(--red-dark)}
-.footer-brand span{font-size:.76rem;color:var(--gold)}
-.footer-links{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:rgba(255,255,255,.5)}
-.footer-right{margin-left:auto;text-align:right;font-size:.8rem;color:rgba(255,255,255,.45)}
+.footer-inner{max-width:1280px;margin:0 auto;padding:34px 28px 26px;display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:36px}
+.footer-logo{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.footer-logo .brand-mark{width:44px;height:44px;font-size:1.4rem}
+.footer-logo b{font-family:var(--font-serif);font-size:1.25rem;color:#fff;display:block;position:relative;padding-bottom:8px}
+.footer-logo b::after{content:"";position:absolute;left:0;bottom:0;width:44px;height:3px;background:var(--red-dark)}
+.footer-logo span{font-size:.74rem;color:var(--gold);display:block;margin-top:6px}
+.footer-motto{font-size:.8rem;color:rgba(255,255,255,.55);letter-spacing:.08em}
+.footer-col{display:flex;flex-direction:column;gap:8px}
+.footer-col h5{font-size:.82rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.footer-col a,.footer-col span{font-size:.82rem;color:rgba(255,255,255,.6);text-decoration:none;transition:color .2s}
+.footer-col a:hover{color:#fff}
+.footer-bar{
+  border-top:1px solid rgba(255,255,255,.1);
+  max-width:1280px;margin:0 auto;padding:16px 28px;
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  font-size:.76rem;color:rgba(255,255,255,.45);
+}
 
 /* ==========================================================================
    骨架屏
@@ -588,12 +598,92 @@ textarea{resize:vertical;min-height:84px}
 @keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
 
 /* ==========================================================================
+   轮播图 — 参考官网首页 banner
+   ========================================================================== */
+.carousel{
+  position:relative;margin-bottom:22px;overflow:hidden;
+  padding:0;height:clamp(260px,34vw,420px);
+}
+.carousel-track{position:relative;width:100%;height:100%}
+.slide{
+  position:absolute;inset:0;opacity:0;transition:opacity .7s ease;
+  pointer-events:none;
+}
+.slide.active{opacity:1;pointer-events:auto;z-index:2}
+.slide img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  transform:scale(1.04);transition:transform 6s ease;
+}
+.slide.active img{transform:scale(1)}
+.slide-cap{
+  position:absolute;left:0;right:0;bottom:0;
+  padding:40px 32px 22px;
+  background:linear-gradient(transparent,rgba(0,0,0,.62));
+  color:#fff;display:flex;flex-direction:column;gap:2px;
+}
+.slide-cap b{font-family:var(--font-serif);font-size:1.3rem;font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+.slide-cap span{font-size:.82rem;color:rgba(255,255,255,.85);letter-spacing:.05em}
+
+.car-btn{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:5;
+  width:42px;height:42px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.4);
+  background:rgba(0,0,0,.32);backdrop-filter:blur(6px);
+  color:#fff;font-size:1.5rem;line-height:1;cursor:pointer;
+  display:grid;place-items:center;transition:all .22s;
+  opacity:0;
+}
+.carousel:hover .car-btn{opacity:1}
+.car-btn:hover{background:var(--red);border-color:var(--red);transform:translateY(-50%) scale(1.08)}
+.car-btn.prev{left:16px}
+.car-btn.next{right:16px}
+
+.car-dots{
+  position:absolute;bottom:16px;right:20px;z-index:5;
+  display:flex;gap:8px;
+}
+.car-dots button{
+  width:9px;height:9px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(255,255,255,.45);transition:all .25s;padding:0;
+}
+.car-dots button.active{background:var(--gold);transform:scale(1.3);box-shadow:0 0 6px rgba(205,181,96,.8)}
+.car-dots button:hover{background:#fff}
+
+/* ==========================================================================
+   校园文化画廊
+   ========================================================================== */
+.campus-intro{padding:20px 24px;margin-bottom:22px}
+.campus-intro p{font-size:.92rem;color:var(--text-body);line-height:1.8;max-width:80ch}
+.campus-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+.campus-card{
+  overflow:hidden;display:flex;flex-direction:column;padding:0;
+  transition:transform .3s cubic-bezier(.22,1,.36,1),box-shadow .3s;
+  cursor:pointer;
+}
+.campus-card:hover,.campus-card:focus-visible{transform:translateY(-5px);box-shadow:var(--shadow-hover)}
+.campus-img-wrap{overflow:hidden;aspect-ratio:3/2;position:relative}
+.campus-img-wrap img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  transition:transform .6s cubic-bezier(.22,1,.36,1);
+}
+.campus-card:hover .campus-img-wrap img{transform:scale(1.07)}
+.campus-card figcaption{padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.campus-card figcaption b{font-family:var(--font-serif);font-size:1.02rem;font-weight:700;color:var(--red)}
+.campus-card figcaption span{font-size:.83rem;color:var(--text-muted);line-height:1.6}
+
+/* 懒加载图片：未加载时显示模糊占位 */
+.lazy-img,.slide img{background:linear-gradient(135deg,#e8dfd8,#dcd0c6);min-height:80px}
+[data-theme="dark"] .lazy-img,[data-theme="dark"] .slide img{background:linear-gradient(135deg,#2a2426,#221d1f)}
+
+/* ==========================================================================
    响应式
    ========================================================================== */
+
 @media (max-width:1080px){
   .chat-layout{grid-template-columns:1fr}
   .panel{position:static;flex-direction:row;flex-wrap:wrap}
   .panel .card{flex:1;min-width:240px}
+  .footer-inner{grid-template-columns:1fr 1fr;gap:28px}
 }
 
 @media (max-width:860px){
@@ -610,9 +700,13 @@ textarea{resize:vertical;min-height:84px}
   .composer-foot{flex-direction:column;align-items:stretch}
   .send-btn{width:100%}
   .tools-grid{grid-template-columns:1fr}
-  .footer-inner{flex-direction:column;text-align:center;gap:16px}
-  .footer-brand b::after{left:50%;transform:translateX(-50%)}
-  .footer-right{margin-left:0;text-align:center}
+  .carousel{height:clamp(200px,46vw,320px)}
+  .car-btn{opacity:1;width:36px;height:36px}
+  .slide-cap{padding:30px 20px 16px}
+  .slide-cap b{font-size:1.1rem}
+  .campus-grid{grid-template-columns:1fr}
+  .footer-inner{grid-template-columns:1fr;text-align:left;gap:24px;padding:26px 20px 20px}
+  .footer-bar{flex-direction:column;gap:6px;padding:14px 20px}
 }
 
 @media (max-width:480px){
@@ -621,6 +715,7 @@ textarea{resize:vertical;min-height:84px}
   .hero-title{font-size:1.3rem}
   .stat{padding:10px 14px}
   .stat b{font-size:1.3rem}
+  .carousel{height:200px}
 }
 
 /* 滚动条 */

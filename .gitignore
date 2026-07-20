@@ -8,3 +8,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 chroma_db/
+
+# 本地原始大图素材（已压缩产物在 frontend/img/，源文件不入库）
+图片/
+
+# 本地数据库与调试脚本
+data/*.db
+scripts/

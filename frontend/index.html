@@ -54,6 +54,10 @@
             <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
             <span>知识库</span>
           </a>
+          <a href="#/campus" class="nav-link" data-route="campus" role="menuitem">
+            <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+            <span>校园文化</span>
+          </a>
           <a href="#/history" class="nav-link" data-route="history" role="menuitem">
             <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.9 3.9.1.1L9 12H6c0-3.9 3.1-7 7-7s7 3.1 7 7-3.1 7-7 7c-1.9 0-3.7-.8-4.9-2.1l-1.4 1.4A8.9 8.9 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.3 2.5.7-1.2-3.5-2.1V8H12z"/></svg>
             <span>对话历史</span>
@@ -91,7 +95,7 @@
           </div>
           <div class="topbar-right">
             <span class="topbar-chip"><b id="topbar-sid">S001</b></span>
-            <span class="topbar-chip gold">v0.7 SPA</span>
+            <span class="topbar-chip gold">v0.8 SPA</span>
           </div>
         </header>
 
@@ -101,6 +105,43 @@
           <!-- ================== 概览 ================== -->
           <section id="view-dashboard" class="view" aria-labelledby="dash-h">
             <h2 class="sr-only">概览仪表盘</h2>
+
+            <!-- 校园风光轮播图 -->
+            <div class="carousel glass" id="carousel" aria-roledescription="carousel" aria-label="校园风光">
+              <div class="carousel-track" id="carousel-track">
+                <figure class="slide active">
+                  <img src="/static/img/lake-1280.webp"
+                       srcset="/static/img/lake-768.webp 768w, /static/img/lake-1280.webp 1280w, /static/img/lake-1920.webp 1920w"
+                       sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
+                       alt="翡翠湖校区双子楼与天鹅湖" loading="eager" decoding="async" />
+                  <figcaption class="slide-cap"><b>翡翠湖校区</b><span>双子楼 · 天鹅湖</span></figcaption>
+                </figure>
+                <figure class="slide">
+                  <img data-src="/static/img/stadium-1280.webp"
+                       data-srcset="/static/img/stadium-768.webp 768w, /static/img/stadium-1280.webp 1280w, /static/img/stadium-1920.webp 1920w"
+                       sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
+                       alt="体育馆塔楼晚霞" loading="lazy" decoding="async" />
+                  <figcaption class="slide-cap"><b>体育中心</b><span>塔楼 · 晚霞</span></figcaption>
+                </figure>
+                <figure class="slide">
+                  <img data-src="/static/img/gate-1280.webp"
+                       data-srcset="/static/img/gate-768.webp 768w, /static/img/gate-1280.webp 1280w, /static/img/gate-1920.webp 1920w"
+                       sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
+                       alt="合肥工业大学老校门" loading="lazy" decoding="async" />
+                  <figcaption class="slide-cap"><b>屯溪路校区</b><span>老校门 · 红砖主楼</span></figcaption>
+                </figure>
+                <figure class="slide">
+                  <img data-src="/static/img/library-1280.webp"
+                       data-srcset="/static/img/library-768.webp 768w, /static/img/library-1280.webp 1280w, /static/img/library-1920.webp 1920w"
+                       sizes="(max-width:768px) 768px, (max-width:1280px) 1280px, 1920px"
+                       alt="图书馆夜景灯光倒影" loading="lazy" decoding="async" />
+                  <figcaption class="slide-cap"><b>图书馆</b><span>夜景 · 湖畔倒影</span></figcaption>
+                </figure>
+              </div>
+              <button class="car-btn prev" id="car-prev" aria-label="上一张">‹</button>
+              <button class="car-btn next" id="car-next" aria-label="下一张">›</button>
+              <div class="car-dots" id="car-dots" role="tablist" aria-label="轮播指示器"></div>
+            </div>
 
             <div class="hero glass">
               <div class="hero-text">
@@ -285,6 +326,70 @@
             </div>
           </section>
 
+          <!-- ================== 校园文化 ================== -->
+          <section id="view-campus" class="view" aria-labelledby="campus-h">
+            <h2 class="sr-only">校园文化</h2>
+            <h3 class="view-h" id="campus-h">校园文化 <small>· 厚德 笃学 崇实 尚新 · 校园风光</small></h3>
+
+            <div class="glass card campus-intro">
+              <p>合肥工业大学创建于 1945 年，是教育部直属全国重点大学、国家「211 工程」和「双一流」建设高校。学校秉承「厚德、笃学、崇实、尚新」校训，形成了鲜明的工程文化教育特色。以下为校园四季风光。</p>
+            </div>
+
+            <div class="campus-grid">
+              <figure class="campus-card glass" tabindex="0">
+                <div class="campus-img-wrap">
+                  <img data-src="/static/img/lake-1280.webp"
+                       data-srcset="/static/img/lake-768.webp 768w, /static/img/lake-1280.webp 1280w"
+                       sizes="(max-width:768px) 100vw, 640px"
+                       alt="翡翠湖校区双子楼与天鹅湖" loading="lazy" decoding="async" class="lazy-img" />
+                </div>
+                <figcaption>
+                  <b>翡翠湖校区 · 双子楼</b>
+                  <span>碧波荡漾的天鹅湖畔，双子教学楼巍然矗立，是学校标志性景观之一。</span>
+                </figcaption>
+              </figure>
+
+              <figure class="campus-card glass" tabindex="0">
+                <div class="campus-img-wrap">
+                  <img data-src="/static/img/stadium-1280.webp"
+                       data-srcset="/static/img/stadium-768.webp 768w, /static/img/stadium-1280.webp 1280w"
+                       sizes="(max-width:768px) 100vw, 640px"
+                       alt="体育馆塔楼晚霞" loading="lazy" decoding="async" class="lazy-img" />
+                </div>
+                <figcaption>
+                  <b>体育中心 · 塔楼</b>
+                  <span>晚霞映照下的体育塔楼与环形主场馆，见证学子挥洒汗水的青春时光。</span>
+                </figcaption>
+              </figure>
+
+              <figure class="campus-card glass" tabindex="0">
+                <div class="campus-img-wrap">
+                  <img data-src="/static/img/gate-1280.webp"
+                       data-srcset="/static/img/gate-768.webp 768w, /static/img/gate-1280.webp 1280w"
+                       sizes="(max-width:768px) 100vw, 640px"
+                       alt="合肥工业大学老校门" loading="lazy" decoding="async" class="lazy-img" />
+                </div>
+                <figcaption>
+                  <b>屯溪路校区 · 老校门</b>
+                  <span>红砖主楼前的古朴校门，镌刻着学校七十余载的办学历史与文化底蕴。</span>
+                </figcaption>
+              </figure>
+
+              <figure class="campus-card glass" tabindex="0">
+                <div class="campus-img-wrap">
+                  <img data-src="/static/img/library-1280.webp"
+                       data-srcset="/static/img/library-768.webp 768w, /static/img/library-1280.webp 1280w"
+                       sizes="(max-width:768px) 100vw, 640px"
+                       alt="图书馆夜景灯光倒影" loading="lazy" decoding="async" class="lazy-img" />
+                </div>
+                <figcaption>
+                  <b>图书馆 · 夜景</b>
+                  <span>夜幕降临，图书馆灯火通明倒映湖面，是无数学子潜心求学的不灭灯塔。</span>
+                </figcaption>
+              </figure>
+            </div>
+          </section>
+
           <!-- ================== 对话历史 ================== -->
           <section id="view-history" class="view" aria-labelledby="hist-h">
             <h2 class="sr-only">对话历史</h2>
@@ -357,17 +462,40 @@
         <footer class="site-footer">
           <div class="footer-inner">
             <div class="footer-brand">
-              <b>合肥工业大学</b>
-              <span>Hefei University of Technology</span>
+              <div class="footer-logo">
+                <span class="brand-mark" aria-hidden="true">工</span>
+                <div>
+                  <b>合肥工业大学</b>
+                  <span>Hefei University of Technology</span>
+                </div>
+              </div>
+              <p class="footer-motto">厚德 · 笃学 · 崇实 · 尚新</p>
             </div>
-            <div class="footer-links">
-              <span>校园智能问答工作台 v0.7</span>
-              <span>FastAPI + LangChain + ChromaDB + MCP</span>
+            <div class="footer-col">
+              <h5>校园服务</h5>
+              <a href="#/chat">智能问答</a>
+              <a href="#/tools">校园工具</a>
+              <a href="#/knowledge">知识库</a>
+              <a href="#/campus">校园文化</a>
             </div>
-            <div class="footer-right">
-              <span>© 2026 Campus Smart Q&amp;A</span>
-              <span>厚德 · 笃学 · 崇实 · 尚新</span>
+            <div class="footer-col">
+              <h5>技术架构</h5>
+              <span>FastAPI 异步服务</span>
+              <span>LangChain + ChromaDB</span>
+              <span>DeepSeek LLM</span>
+              <span>MCP 实时工具</span>
             </div>
+            <div class="footer-col">
+              <h5>学校链接</h5>
+              <a href="https://www.hfut.edu.cn/" target="_blank" rel="noopener">学校官网</a>
+              <a href="http://news.hfut.edu.cn/" target="_blank" rel="noopener">新闻文化网</a>
+              <a href="https://jwc.hfut.edu.cn/" target="_blank" rel="noopener">本科生院</a>
+              <a href="https://lib.hfut.edu.cn/" target="_blank" rel="noopener">图书馆</a>
+            </div>
+          </div>
+          <div class="footer-bar">
+            <span>© 2026 校园智能问答工作台 v0.8 · 校园课程项目演示</span>
+            <span>地址：安徽省合肥市屯溪路 193 号 · 230009</span>
           </div>
         </footer>
 

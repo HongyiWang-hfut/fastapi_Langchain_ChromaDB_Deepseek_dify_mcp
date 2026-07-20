@@ -23,6 +23,7 @@ const ROUTES = {
   chat:      { title: '智能问答', crumb: 'Chat' },
   tools:     { title: '校园工具', crumb: 'Tools' },
   knowledge: { title: '知识库', crumb: 'Knowledge' },
+  campus:    { title: '校园文化', crumb: 'Campus' },
   history:   { title: '对话历史', crumb: 'History' },
   settings:  { title: '设置', crumb: 'Settings' },
 };
@@ -160,6 +161,8 @@ const REFRESHERS = {};
    Dashboard
    ============================================================ */
 INITERS.dashboard = function initDashboard() {
+  initCarousel();
+  initLazyImages('#view-dashboard');
   // 数字滚动
   $$('.count').forEach(el => {
     const to = parseInt(el.dataset.to, 10) || 0;
@@ -180,6 +183,100 @@ function animateCount(el, to) {
   }
   requestAnimationFrame(step);
 }
+
+/* ---- 轮播图 ---- */
+let carouselTimer = null;
+
+function initCarousel() {
+  const track = $('#carousel-track');
+  if (!track) return;
+  const slides = $$('.slide', track);
+  const dotsWrap = $('#car-dots');
+  if (slides.length === 0) return;
+  let idx = 0;
+
+  // 生成指示点
+  dotsWrap.innerHTML = '';
+  slides.forEach((_, i) => {
+    const b = document.createElement('button');
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-label', `第 ${i + 1} 张`);
+    if (i === 0) b.classList.add('active');
+    b.addEventListener('click', () => { go(i); restart(); });
+    dotsWrap.appendChild(b);
+  });
+  const dots = $$('button', dotsWrap);
+
+  function show(i) {
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    dots.forEach((d, k) => d.classList.toggle('active', k === i));
+    // 懒加载当前 + 相邻
+    loadSlide(slides[i]);
+    loadSlide(slides[(i + 1) % slides.length]);
+  }
+  function go(i) { idx = (i + slides.length) % slides.length; show(idx); }
+  function next() { go(idx + 1); }
+  function prev() { go(idx - 1); }
+
+  function loadSlide(slide) {
+    const img = slide?.querySelector('img[data-src]');
+    if (!img) return;
+    if (img.dataset.src) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+    if (img.dataset.srcset) { img.srcset = img.dataset.srcset; img.removeAttribute('data-srcset'); }
+  }
+
+  function restart() {
+    clearInterval(carouselTimer);
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      carouselTimer = setInterval(next, 5000);
+    }
+  }
+
+  $('#car-prev')?.addEventListener('click', () => { prev(); restart(); });
+  $('#car-next')?.addEventListener('click', () => { next(); restart(); });
+
+  // 触摸滑动
+  let startX = 0;
+  track.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    if (Math.abs(dx) > 40) { dx < 0 ? next() : prev(); restart(); }
+  }, { passive: true });
+
+  // 悬停暂停
+  const car = $('#carousel');
+  car?.addEventListener('mouseenter', () => clearInterval(carouselTimer));
+  car?.addEventListener('mouseleave', restart);
+
+  show(0);
+  restart();
+}
+
+/* ---- 懒加载图片（data-src / data-srcset） ---- */
+function initLazyImages(scope) {
+  const root = document.querySelector(scope);
+  if (!root) return;
+  const imgs = $$('img[data-src]', root);
+  const load = (img) => {
+    if (img.dataset.src) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+    if (img.dataset.srcset) { img.srcset = img.dataset.srcset; img.removeAttribute('data-srcset'); }
+  };
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        if (en.isIntersecting) { load(en.target); io.unobserve(en.target); }
+      });
+    }, { rootMargin: '200px' });
+    imgs.forEach(img => io.observe(img));
+  } else {
+    imgs.forEach(load);
+  }
+}
+
+/* ---- 校园文化视图：初始化懒加载 ---- */
+INITERS.campus = function initCampus() {
+  initLazyImages('#view-campus');
+};
 
 async function checkStatus() {
   const set = (id, txt, cls) => { const e = $('#' + id); if (e) { e.textContent = txt; e.className = 'badge ' + cls; } };

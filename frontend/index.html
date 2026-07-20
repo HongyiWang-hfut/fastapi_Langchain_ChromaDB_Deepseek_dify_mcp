@@ -1,25 +1,32 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="合肥工业大学校园智能问答助手 — MCP 工具调用 + RAG 知识检索 + AI 自动生成" />
     <title>合肥工业大学 · 校园智能问答</title>
     <link rel="stylesheet" href="/static/style.css" />
+    <!-- Markdown 渲染：marked + DOMPurify（离线时优雅降级为纯文本） -->
+    <script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <script defer src="/static/app.js"></script>
   </head>
   <body>
+
+    <!-- 跳转主内容（a11y） -->
+    <a href="#qa" class="skip-link">跳到主内容</a>
 
     <!-- ============================================================ -->
     <!-- 顶部导航 — 参考 .header fixed + 深红背景 -->
     <!-- ============================================================ -->
     <header class="top-bar" id="top">
       <div class="top-inner">
-        <a href="/" class="top-logo">
-          <span class="logo-mark">工</span>
+        <a href="/" class="top-logo" aria-label="合肥工业大学校园智能问答 首页">
+          <span class="logo-mark" aria-hidden="true">工</span>
           <span class="logo-cn">合肥工业大学</span>
           <span class="logo-en">Hefei University of Technology</span>
         </a>
-        <nav class="top-nav">
+        <nav class="top-nav" aria-label="主导航">
           <a href="#qa" class="top-nav-item active">智能问答</a>
           <a href="#tools" class="top-nav-item">校园工具</a>
           <a href="#status" class="top-nav-item">服务状态</a>
@@ -28,6 +35,9 @@
           <span class="top-chip">MCP 工具</span>
           <span class="top-chip">RAG 检索</span>
           <span class="top-chip gold">流式 SSE</span>
+          <button id="theme-btn" class="theme-btn" aria-label="切换深色模式" title="切换深色/浅色模式">
+            <span class="theme-icon" aria-hidden="true">🌙</span>
+          </button>
         </div>
       </div>
     </header>
@@ -45,24 +55,24 @@
             <span>校园服务</span>
             <small>· Campus Services</small>
           </h3>
-          <div class="tool-grid">
-            <button class="tool-item active" data-preset="我的课表是什么？">
-              <i>📅</i>课表查询
+          <div class="tool-grid" role="group" aria-label="校园服务快捷入口">
+            <button class="tool-item active" data-preset="我的课表是什么？" aria-label="查询我的课表">
+              <i aria-hidden="true">📅</i>课表查询
             </button>
-            <button class="tool-item" data-preset="图书馆总馆开放时间是什么？">
-              <i>📚</i>图书馆
+            <button class="tool-item" data-preset="图书馆总馆开放时间是什么？" aria-label="查询图书馆开放时间">
+              <i aria-hidden="true">📚</i>图书馆
             </button>
-            <button class="tool-item" data-preset="教学楼 101 什么时候空闲？">
-              <i>🏫</i>空闲教室
+            <button class="tool-item" data-preset="教学楼 101 什么时候空闲？" aria-label="查询空闲教室">
+              <i aria-hidden="true">🏫</i>空闲教室
             </button>
-            <button class="tool-item" data-preset="今天食堂有什么推荐的？">
-              <i>🍽️</i>食堂菜单
+            <button class="tool-item" data-preset="今天食堂有什么推荐的？" aria-label="查询食堂菜单">
+              <i aria-hidden="true">🍽️</i>食堂菜单
             </button>
-            <button class="tool-item" data-preset="校车路线和时刻是怎样的？">
-              <i>🚌</i>校车时刻
+            <button class="tool-item" data-preset="校车路线和时刻是怎样的？" aria-label="查询校车时刻">
+              <i aria-hidden="true">🚌</i>校车时刻
             </button>
-            <button class="tool-item" data-preset="北京今天天气怎么样？">
-              <i>🌤️</i>天气查询
+            <button class="tool-item" data-preset="北京今天天气怎么样？" aria-label="查询天气">
+              <i aria-hidden="true">🌤️</i>天气查询
             </button>
           </div>
         </div>
@@ -91,19 +101,19 @@
             <span>当前学生 <strong id="current-sid">S001</strong></span>
             <span>对话轮次 <strong id="memory-count">0</strong></span>
           </div>
-          <button id="reset-btn" class="reset-btn">重置对话</button>
+          <button id="reset-btn" class="reset-btn" aria-label="重置当前学生的对话历史">重置对话</button>
         </div>
       </aside>
 
       <!-- ========== 中央工作区 ========== -->
-      <section class="workspace">
+      <section class="workspace" aria-labelledby="hero-title">
         <!-- Hero — 参考 .title 红色标题 + 金色副标题 -->
         <div class="hero">
           <div class="hero-text">
             <p class="hero-motto">
-              <i class="gold-dash"></i>厚德 · 笃学 · 崇实 · 尚新
+              <i class="gold-dash" aria-hidden="true"></i>厚德 · 笃学 · 崇实 · 尚新
             </p>
-            <h1 class="hero-title">
+            <h1 class="hero-title" id="hero-title">
               校园智能问答助手
               <small>Campus Smart Q&A Assistant</small>
             </h1>
@@ -112,14 +122,14 @@
               一站式解决课表、图书馆、食堂、校车等校园咨询。
             </p>
           </div>
-          <div class="hero-stats">
-            <div class="stat">
+          <div class="hero-stats" role="list">
+            <div class="stat" role="listitem">
               <b>7</b><span>类工具</span>
             </div>
-            <div class="stat">
+            <div class="stat" role="listitem">
               <b>3</b><span>种模式</span>
             </div>
-            <div class="stat">
+            <div class="stat" role="listitem">
               <b>24h</b><span>在线</span>
             </div>
           </div>
@@ -127,9 +137,9 @@
 
         <!-- 对话面板 — 参考 .news-list li a 卡片风格 -->
         <div class="chat-card">
-          <!-- 工具栏 — 参考 .one-bottom-tabs -->
+          <!-- 工具栏 — 参考 .tabs-more -->
           <div class="chat-bar">
-            <label>
+            <label for="endpoint">
               <span>接口</span>
               <select id="endpoint">
                 <option value="/ask">/ask（标准）</option>
@@ -137,48 +147,49 @@
                 <option value="/ask/stream">/ask/stream（流式）</option>
               </select>
             </label>
-            <label>
+            <label for="student-id">
               <span>学生 ID</span>
-              <input id="student-id" type="text" value="S001" maxlength="16" />
+              <input id="student-id" type="text" value="S001" maxlength="16" autocomplete="off" />
             </label>
-            <label>
+            <label for="api-key">
               <span>API Key</span>
-              <input id="api-key" type="password" value="campus-qa-dev-key" />
+              <input id="api-key" type="password" value="campus-qa-dev-key" autocomplete="off" />
             </label>
           </div>
 
-          <!-- 消息区 -->
-          <div id="messages" class="messages">
+          <!-- 消息区 — role=log 让屏幕阅读器播报新消息 -->
+          <div id="messages" class="messages" role="log" aria-live="polite" aria-label="对话记录" aria-busy="false">
             <div class="msg assistant">
-              <div class="msg-avatar">AI</div>
-              <div class="msg-bubble">
-                你好！我是合肥工业大学校园智能助手。可以帮你查课表、图书馆借阅、空闲教室、食堂菜单、校车时刻、天气和报修。试试看吧！
+              <div class="msg-avatar" aria-hidden="true">AI</div>
+              <div class="msg-bubble md">
+                <p>你好！我是合肥工业大学校园智能助手。可以帮你查课表、图书馆借阅、空闲教室、食堂菜单、校车时刻、天气和报修。试试看吧！</p>
               </div>
             </div>
           </div>
 
           <!-- 输入区 -->
           <div class="composer">
+            <label for="question" class="sr-only">输入你的问题</label>
             <textarea id="question" rows="3" placeholder="例如：我的课表是什么？  /  图书馆总馆开放时间？  /  今天食堂有什么好吃的？"></textarea>
             <div class="composer-foot">
-              <div class="quick-row">
+              <div class="quick-row" role="group" aria-label="快捷测试问题">
                 <button class="pill" data-preset="我的课表是什么？">课表测试</button>
                 <button class="pill" data-preset="图书馆总馆开放时间是什么？">图书馆测试</button>
                 <button class="pill" data-preset="今天食堂有什么菜？">食堂测试</button>
                 <button class="pill" data-preset="请用一句话介绍你的能力">自动生成</button>
               </div>
-              <button id="send-btn" class="send-btn">发 送</button>
+              <button id="send-btn" class="send-btn" aria-label="发送问题">发 送</button>
             </div>
-            <p class="hint">Ctrl + Enter 快捷发送</p>
+            <p class="hint" id="kbd-hint">Ctrl + Enter 快捷发送</p>
           </div>
         </div>
       </section>
 
       <!-- ========== 右侧诊断面板 ========== -->
-      <aside class="panel">
+      <aside class="panel" aria-label="回答诊断面板">
         <div class="info-card">
           <h3 class="info-title">
-            <i class="dot"></i>本次回答
+            <i class="dot" aria-hidden="true"></i>本次回答
           </h3>
           <div class="kv"><span>模式</span><strong id="mode-tag">-</strong></div>
           <div class="kv"><span>自动生成</span><strong id="auto-tag">-</strong></div>
@@ -186,18 +197,18 @@
         </div>
         <div class="info-card">
           <h3 class="info-title">
-            <i class="dot"></i>工具结果
+            <i class="dot" aria-hidden="true"></i>工具结果
           </h3>
           <pre id="tool-results" class="json-box">等待请求…</pre>
         </div>
         <div class="info-card">
           <h3 class="info-title">
-            <i class="dot"></i>处理流程
+            <i class="dot" aria-hidden="true"></i>处理流程
           </h3>
           <ul class="flow-notes">
-            <li><i class="flow-dot red"></i>MCP 工具调用优先</li>
-            <li><i class="flow-dot blue"></i>RAG 知识库检索兜底</li>
-            <li><i class="flow-dot gold"></i>自动生成回答并标注</li>
+            <li><i class="flow-dot red" aria-hidden="true"></i>MCP 工具调用优先</li>
+            <li><i class="flow-dot blue" aria-hidden="true"></i>RAG 知识库检索兜底</li>
+            <li><i class="flow-dot gold" aria-hidden="true"></i>自动生成回答并标注</li>
           </ul>
         </div>
       </aside>
@@ -213,7 +224,7 @@
           <span>Hefei University of Technology</span>
         </div>
         <div class="footer-links">
-          <span>校园智能问答助手 v0.5</span>
+          <span>校园智能问答助手 v0.6</span>
           <span>FastAPI + LangChain + ChromaDB + MCP</span>
         </div>
         <div class="footer-right">

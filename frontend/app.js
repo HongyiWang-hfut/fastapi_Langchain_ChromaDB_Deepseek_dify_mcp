@@ -18,51 +18,127 @@ const mcpBadge     = $('#mcp-badge');
 const ragBadge     = $('#rag-badge');
 const memoryCount  = $('#memory-count');
 const currentSid   = $('#current-sid');
+const themeBtn     = $('#theme-btn');
 
 let streamCtrl = null;
 let msgCount = 0;
 
-/* ---- helpers ---- */
-const esc = (t) => String(t).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-
-function addMsg(role, text, meta) {
-  const el = document.createElement('div');
-  el.className = `msg ${role}`;
-  el.innerHTML =
-    `<div class="msg-avatar">${role==='user'?'你':'AI'}</div>` +
-    `<div class="msg-bubble">${esc(text).replaceAll('\n','<br>')}</div>` +
-    (meta ? `<div style="font-size:.76rem;color:var(--text-muted);padding:2px 4px">${esc(meta)}</div>` : '');
-  messagesEl.appendChild(el);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+/* ============================================================
+   主题管理（暗色模式）
+   ============================================================ */
+function initTheme() {
+  const saved = localStorage.getItem('campus-qa-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  applyTheme(theme);
 }
 
-function addStreamMsg() {
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const icon = themeBtn.querySelector('.theme-icon');
+  if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+  themeBtn.setAttribute('aria-label', theme === 'dark' ? '切换浅色模式' : '切换深色模式');
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  localStorage.setItem('campus-qa-theme', next);
+}
+
+/* ============================================================
+   helpers
+   ============================================================ */
+const esc = (t) => String(t).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+
+/**
+ * 渲染 Markdown 为安全 HTML。
+ * 使用 marked + DOMPurify；若 CDN 未加载则降级为转义纯文本。
+ */
+function renderMarkdown(text) {
+  if (window.marked && window.DOMPurify) {
+    try {
+      marked.setOptions({ breaks: true, gfm: true });
+      const raw = marked.parse(String(text));
+      return window.DOMPurify.sanitize(raw, {
+        ALLOWED_TAGS: ['p','br','strong','em','del','code','pre','blockquote',
+          'ul','ol','li','h1','h2','h3','h4','h5','h6','a','table','thead',
+          'tbody','tr','th','td','hr','span'],
+        ALLOWED_ATTR: ['href','title'],
+      });
+    } catch (_) { /* 降级 */ }
+  }
+  return esc(text).replaceAll('\n', '<br>');
+}
+
+/* ---- 消息渲染 ---- */
+function setBusy(busy) {
+  messagesEl.setAttribute('aria-busy', busy ? 'true' : 'false');
+}
+
+function addMsg(role, text, meta, isError) {
   const el = document.createElement('div');
-  el.className = 'msg assistant';
+  el.className = `msg ${role}${isError ? ' error' : ''}`;
+  const avatar = role === 'user' ? '你' : 'AI';
+  // 用户消息始终转义（不渲染 Markdown，防注入）；助手消息渲染 Markdown
+  const body = role === 'user'
+    ? esc(text).replaceAll('\n', '<br>')
+    : (isError ? esc(text).replaceAll('\n', '<br>') : renderMarkdown(text));
   el.innerHTML =
-    `<div class="msg-avatar">AI</div>` +
-    `<div class="msg-bubble"><span class="s-text"></span></div>` +
-    `<div style="font-size:.76rem;color:var(--text-muted);padding:2px 4px">流式输出中…</div>`;
+    `<div class="msg-avatar" aria-hidden="true">${avatar}</div>` +
+    `<div class="msg-bubble${role === 'assistant' && !isError ? ' md' : ''}">${body}</div>` +
+    (meta ? `<div class="typing-hint" style="padding:2px 4px">${esc(meta)}</div>` : '');
   messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return el;
 }
 
-function appendStream(el, text) {
-  el.querySelector('.s-text').textContent += text;
+/** 显示打字指示器，返回该消息元素，供后续替换 */
+function showTyping() {
+  const el = document.createElement('div');
+  el.className = 'msg assistant';
+  el.innerHTML =
+    `<div class="msg-avatar" aria-hidden="true">AI</div>` +
+    `<div class="msg-bubble"><div class="typing-dots" aria-label="正在思考"><span></span><span></span><span></span></div></div>`;
+  messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  return el;
 }
 
-function finishStream(el, meta) {
-  el.lastElementChild.textContent = meta || '完成';
+/** 流式：把打字指示器替换为流式文本容器 */
+function typingToStream(el) {
+  const bubble = el.querySelector('.msg-bubble');
+  if (bubble) bubble.innerHTML = '<span class="s-text"></span>';
+  return el;
+}
+
+function appendStream(el, text) {
   const span = el.querySelector('.s-text');
   if (span) {
-    const bubble = el.querySelector('.msg-bubble');
-    bubble.innerHTML = esc(span.textContent).replaceAll('\n','<br>');
+    span.textContent += text;
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 }
 
-/* ---- status panel ---- */
+/** 流式完成：把纯文本流转为 Markdown 渲染 */
+function finishStream(el, meta) {
+  const span = el.querySelector('.s-text');
+  const bubble = el.querySelector('.msg-bubble');
+  if (span && bubble) {
+    bubble.className = 'msg-bubble md';
+    bubble.innerHTML = renderMarkdown(span.textContent);
+  }
+  if (meta) {
+    const hint = document.createElement('div');
+    hint.className = 'typing-hint';
+    hint.style.padding = '2px 4px';
+    hint.textContent = meta;
+    el.appendChild(hint);
+  }
+}
+
+/* ---- 状态面板 ---- */
 function setStatus({mode, autoGenerated, toolsUsed, toolResults: tr}) {
   modeTag.textContent = mode || '-';
   autoTag.textContent = autoGenerated ? '是' : '否';
@@ -77,6 +153,9 @@ function setStatus({mode, autoGenerated, toolsUsed, toolResults: tr}) {
   } else if (mode === 'rag') {
     mcpBadge.textContent = '-'; mcpBadge.className = 'badge';
     ragBadge.textContent = '命中'; ragBadge.className = 'badge on';
+  } else if (mode === 'error') {
+    mcpBadge.textContent = '错误'; mcpBadge.className = 'badge';
+    ragBadge.textContent = '错误'; ragBadge.className = 'badge';
   } else {
     mcpBadge.textContent = '-'; mcpBadge.className = 'badge';
     ragBadge.textContent = '-'; ragBadge.className = 'badge';
@@ -90,7 +169,9 @@ function headers() {
   };
 }
 
-/* ---- API ---- */
+/* ============================================================
+   API
+   ============================================================ */
 async function askNormal(question, endpoint, sid) {
   const res = await fetch(endpoint, {
     method:'POST', headers:headers(),
@@ -114,7 +195,7 @@ async function askStream(question, sid, el) {
   }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
-  let buf = '', meta = null;
+  let buf = '', meta = null, firstToken = true;
   while (true) {
     const {done, value} = await reader.read();
     if (done) break;
@@ -123,15 +204,26 @@ async function askStream(question, sid, el) {
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
       const p = JSON.parse(line.slice(6));
-      if (p.event === 'meta') { meta = p; setStatus(meta); finishStream(el, `模式：${p.mode}${p.auto_generated?' · 自动生成':''}`); }
-      else if (p.event === 'token') appendStream(el, p.token);
-      else if (p.event === 'done') finishStream(el, meta ? `模式：${meta.mode} · 完成` : '完成');
+      if (p.event === 'meta') {
+        meta = p; setStatus(meta);
+      } else if (p.event === 'token') {
+        if (firstToken) { typingToStream(el); firstToken = false; }
+        appendStream(el, p.token);
+      } else if (p.event === 'done') {
+        finishStream(el, meta ? `模式：${meta.mode}${meta.auto_generated ? ' · 自动生成' : ''} · 完成` : '完成');
+      }
     }
+  }
+  // 若全程无 token（异常情况），移除指示器
+  if (firstToken) {
+    el.querySelector('.msg-bubble').innerHTML = '<span class="typing-hint">未收到内容。</span>';
   }
   streamCtrl = null;
 }
 
-/* ---- main ---- */
+/* ============================================================
+   主流程
+   ============================================================ */
 async function ask() {
   const q = questionEl.value.trim();
   const endpoint = endpointEl.value;
@@ -141,24 +233,33 @@ async function ask() {
   if (streamCtrl) { streamCtrl.abort(); streamCtrl = null; }
 
   sendBtn.disabled = true; sendBtn.textContent = '…';
+  setBusy(true);
   addMsg('user', q, `接口：${endpoint} · ${sid}`);
   msgCount++; memoryCount.textContent = msgCount;
 
   try {
     if (endpoint === '/ask/stream') {
-      const el = addStreamMsg();
+      const el = showTyping();
       await askStream(q, sid, el);
     } else {
-      const data = await askNormal(q, endpoint, sid);
-      addMsg('assistant', data.answer, `模式：${data.mode||'-'}${data.auto_generated?' · 自动生成':''}`);
-      setStatus(data);
+      const el = showTyping();
+      try {
+        const data = await askNormal(q, endpoint, sid);
+        el.remove();
+        addMsg('assistant', data.answer, `模式：${data.mode||'-'}${data.auto_generated?' · 自动生成':''}`);
+        setStatus(data);
+      } catch (e) {
+        el.remove();
+        throw e;
+      }
     }
   } catch (e) {
-    if (e.name === 'AbortError') return;
-    addMsg('assistant', `请求失败：${e.message}`, '错误');
+    if (e.name === 'AbortError') { setBusy(false); return; }
+    addMsg('assistant', `请求失败：${e.message}`, '错误', true);
     setStatus({mode:'error',autoGenerated:false,toolsUsed:[],toolResults:{}});
   } finally {
     sendBtn.disabled = false; sendBtn.textContent = '发 送';
+    setBusy(false);
     questionEl.focus();
   }
 }
@@ -172,15 +273,18 @@ async function resetConv() {
     if (data.status === 'ok') {
       msgCount = 0; memoryCount.textContent = '0';
       modeTag.textContent = '已重置'; toolsTag.textContent = '-';
+      autoTag.textContent = '-';
       toolResults.textContent = '对话历史已清除。';
       addMsg('assistant', `已清除 ${sid} 的对话历史。`, '系统');
     }
   } catch (e) {
-    addMsg('assistant', `重置失败：${e.message}`, '错误');
+    addMsg('assistant', `重置失败：${e.message}`, '错误', true);
   }
 }
 
-/* ---- events ---- */
+/* ============================================================
+   事件绑定
+   ============================================================ */
 $$('[data-preset]').forEach(btn => {
   btn.addEventListener('click', () => {
     questionEl.value = btn.dataset.preset;
@@ -209,6 +313,10 @@ studentIdEl.addEventListener('input', () => {
 
 sendBtn.addEventListener('click', ask);
 resetBtn.addEventListener('click', resetConv);
+themeBtn.addEventListener('click', toggleTheme);
 questionEl.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key==='Enter') ask();
 });
+
+// 初始化主题
+initTheme();

@@ -8,224 +8,220 @@
     <script defer src="/static/app.js"></script>
   </head>
   <body>
-    <!-- 顶部导航栏 — 参考 HFUT fixed header -->
-    <header class="top-bar">
-      <div class="top-bar-inner">
+
+    <!-- ============================================================ -->
+    <!-- 顶部导航 — 参考 .header fixed + 深红背景 -->
+    <!-- ============================================================ -->
+    <header class="top-bar" id="top">
+      <div class="top-inner">
         <a href="/" class="top-logo">
-          <div class="logo-icon">工</div>
-          <div class="logo-text">
-            <span class="logo-title">合肥工业大学</span>
-            <span class="logo-sub">Campus Smart Q&A</span>
-          </div>
+          <span class="logo-mark">工</span>
+          <span class="logo-cn">合肥工业大学</span>
+          <span class="logo-en">Hefei University of Technology</span>
         </a>
         <nav class="top-nav">
-          <a href="#chat" class="top-nav-link active">智能问答</a>
-          <a href="#tools" class="top-nav-link">校园工具</a>
-          <a href="#status" class="top-nav-link">服务状态</a>
+          <a href="#qa" class="top-nav-item active">智能问答</a>
+          <a href="#tools" class="top-nav-item">校园工具</a>
+          <a href="#status" class="top-nav-item">服务状态</a>
         </nav>
-        <div class="top-actions">
-          <span class="top-tag">MCP</span>
-          <span class="top-tag">RAG</span>
-          <span class="top-tag gold">流式输出</span>
+        <div class="top-links">
+          <span class="top-chip">MCP 工具</span>
+          <span class="top-chip">RAG 检索</span>
+          <span class="top-chip gold">流式 SSE</span>
         </div>
       </div>
     </header>
 
-    <!-- 主布局 -->
-    <main class="shell" id="chat">
-      <!-- 左侧栏：校园工具导航 -->
+    <!-- ============================================================ -->
+    <!-- 主布局 — 宽屏容器 1550px 参考 .container -->
+    <!-- ============================================================ -->
+    <main class="main-grid" id="qa">
+
+      <!-- ========== 左侧栏 ========== -->
       <aside class="sidebar">
-        <div class="side-card">
-          <div class="side-card-title">
-            <span class="gold-dot"></span>校园服务
-          </div>
+        <!-- 工具导航 — 参考 .one-bottom-tabs 金色边框 pills -->
+        <div class="side-card" id="tools">
+          <h3 class="side-title">
+            <span>校园服务</span>
+            <small>· Campus Services</small>
+          </h3>
           <div class="tool-grid">
             <button class="tool-item active" data-preset="我的课表是什么？">
-              <span class="tool-icon">📅</span>课表查询
+              <i>📅</i>课表查询
             </button>
             <button class="tool-item" data-preset="图书馆总馆开放时间是什么？">
-              <span class="tool-icon">📚</span>图书馆
+              <i>📚</i>图书馆
             </button>
             <button class="tool-item" data-preset="教学楼 101 什么时候空闲？">
-              <span class="tool-icon">🏫</span>空闲教室
+              <i>🏫</i>空闲教室
             </button>
             <button class="tool-item" data-preset="今天食堂有什么推荐的？">
-              <span class="tool-icon">🍽️</span>食堂菜单
+              <i>🍽️</i>食堂菜单
             </button>
             <button class="tool-item" data-preset="校车路线和时刻是怎样的？">
-              <span class="tool-icon">🚌</span>校车时刻
+              <i>🚌</i>校车时刻
             </button>
             <button class="tool-item" data-preset="北京今天天气怎么样？">
-              <span class="tool-icon">🌤️</span>天气查询
+              <i>🌤️</i>天气查询
             </button>
           </div>
         </div>
 
+        <!-- 服务状态 — 参考 .notice-list-date 金色装饰 -->
         <div class="side-card" id="status">
-          <div class="side-card-title">
-            <span class="gold-dot"></span>服务状态
+          <h3 class="side-title">
+            <span>服务状态</span>
+            <small>· Status</small>
+          </h3>
+          <dl class="status-list">
+            <div class="status-row">
+              <dt>FastAPI 服务</dt>
+              <dd class="badge on">在线</dd>
+            </div>
+            <div class="status-row">
+              <dt>MCP 工具</dt>
+              <dd class="badge" id="mcp-badge">待检测</dd>
+            </div>
+            <div class="status-row">
+              <dt>RAG 检索</dt>
+              <dd class="badge" id="rag-badge">待检测</dd>
+            </div>
+          </dl>
+          <div class="status-extra">
+            <span>当前学生 <strong id="current-sid">S001</strong></span>
+            <span>对话轮次 <strong id="memory-count">0</strong></span>
           </div>
-          <div class="status-row">
-            <span class="status-label">FastAPI 服务</span>
-            <span class="status-badge ok">在线</span>
-          </div>
-          <div class="status-row">
-            <span class="status-label">MCP 工具</span>
-            <span class="status-badge" id="mcp-badge">待检测</span>
-          </div>
-          <div class="status-row">
-            <span class="status-label">RAG 检索</span>
-            <span class="status-badge" id="rag-badge">待检测</span>
-          </div>
-          <div class="status-row">
-            <span class="status-label">当前学生</span>
-            <span class="status-value" id="current-sid">S001</span>
-          </div>
-          <div class="status-row">
-            <span class="status-label">对话轮数</span>
-            <span class="status-value" id="memory-count">0</span>
-          </div>
-          <button id="reset-btn" class="link-btn">重置对话</button>
+          <button id="reset-btn" class="reset-btn">重置对话</button>
         </div>
       </aside>
 
-      <!-- 中央：对话区 -->
+      <!-- ========== 中央工作区 ========== -->
       <section class="workspace">
-        <!-- Hero — HFUT 风格标题区 -->
-        <div class="hero-banner">
-          <div class="hero-content">
-            <p class="hero-eyebrow">
-              <span class="gold-line"></span>厚德·笃学·崇实·尚新
+        <!-- Hero — 参考 .title 红色标题 + 金色副标题 -->
+        <div class="hero">
+          <div class="hero-text">
+            <p class="hero-motto">
+              <i class="gold-dash"></i>厚德 · 笃学 · 崇实 · 尚新
             </p>
-            <h2 class="hero-title">校园智能问答助手</h2>
+            <h1 class="hero-title">
+              校园智能问答助手
+              <small>Campus Smart Q&A Assistant</small>
+            </h1>
             <p class="hero-desc">
               集成 MCP 实时工具调用、RAG 知识检索与 AI 自动生成，
               一站式解决课表、图书馆、食堂、校车等校园咨询。
             </p>
           </div>
-          <div class="hero-visual">
-            <div class="hero-stat">
-              <span class="hero-num">7</span>
-              <span class="hero-unit">类工具</span>
+          <div class="hero-stats">
+            <div class="stat">
+              <b>7</b><span>类工具</span>
             </div>
-            <div class="hero-stat">
-              <span class="hero-num">3</span>
-              <span class="hero-unit">种模式</span>
+            <div class="stat">
+              <b>3</b><span>种模式</span>
             </div>
-            <div class="hero-stat">
-              <span class="hero-num">24h</span>
-              <span class="hero-unit">在线服务</span>
+            <div class="stat">
+              <b>24h</b><span>在线</span>
             </div>
           </div>
         </div>
 
-        <!-- 对话面板 -->
-        <div class="chat-panel">
-          <!-- 工具栏 -->
-          <div class="chat-toolbar">
-            <label class="toolbar-field">
-              <span class="field-label">接口</span>
+        <!-- 对话面板 — 参考 .news-list li a 卡片风格 -->
+        <div class="chat-card">
+          <!-- 工具栏 — 参考 .one-bottom-tabs -->
+          <div class="chat-bar">
+            <label>
+              <span>接口</span>
               <select id="endpoint">
                 <option value="/ask">/ask（标准）</option>
                 <option value="/ask_with_tools">/ask_with_tools（工具详情）</option>
-                <option value="/ask/stream">/ask/stream（流式输出）</option>
+                <option value="/ask/stream">/ask/stream（流式）</option>
               </select>
             </label>
-            <label class="toolbar-field">
-              <span class="field-label">学生 ID</span>
+            <label>
+              <span>学生 ID</span>
               <input id="student-id" type="text" value="S001" maxlength="16" />
             </label>
-            <label class="toolbar-field">
-              <span class="field-label">API Key</span>
+            <label>
+              <span>API Key</span>
               <input id="api-key" type="password" value="campus-qa-dev-key" />
             </label>
           </div>
 
-          <!-- 消息列表 -->
+          <!-- 消息区 -->
           <div id="messages" class="messages">
-            <div class="message assistant">
+            <div class="msg assistant">
               <div class="msg-avatar">AI</div>
-              <div class="msg-body">
-                <div class="msg-bubble">
-                  你好！我是合肥工业大学校园智能助手。可以帮你查询课表、图书馆借阅、空闲教室、食堂菜单、校车时刻、天气和报修。试试点击左侧快捷入口或直接输入问题吧！
-                </div>
+              <div class="msg-bubble">
+                你好！我是合肥工业大学校园智能助手。可以帮你查课表、图书馆借阅、空闲教室、食堂菜单、校车时刻、天气和报修。试试看吧！
               </div>
             </div>
           </div>
 
           <!-- 输入区 -->
           <div class="composer">
-            <textarea id="question" rows="3" placeholder="例如：我的课表是什么？ / 图书馆总馆开放时间？ / 今天食堂有什么好吃的？"></textarea>
-            <div class="composer-bar">
-              <div class="quick-chips">
-                <button class="chip-btn" data-preset="我的课表是什么？">课表</button>
-                <button class="chip-btn" data-preset="图书馆总馆开放时间是什么？">图书馆</button>
-                <button class="chip-btn" data-preset="今天食堂有什么菜？">食堂</button>
-                <button class="chip-btn" data-preset="请用一句话介绍你的能力">自动生成</button>
+            <textarea id="question" rows="3" placeholder="例如：我的课表是什么？  /  图书馆总馆开放时间？  /  今天食堂有什么好吃的？"></textarea>
+            <div class="composer-foot">
+              <div class="quick-row">
+                <button class="pill" data-preset="我的课表是什么？">课表测试</button>
+                <button class="pill" data-preset="图书馆总馆开放时间是什么？">图书馆测试</button>
+                <button class="pill" data-preset="今天食堂有什么菜？">食堂测试</button>
+                <button class="pill" data-preset="请用一句话介绍你的能力">自动生成</button>
               </div>
               <button id="send-btn" class="send-btn">发 送</button>
             </div>
-            <p class="composer-hint">Ctrl + Enter 快捷发送</p>
+            <p class="hint">Ctrl + Enter 快捷发送</p>
           </div>
         </div>
       </section>
 
-      <!-- 右侧栏：诊断面板 -->
-      <aside class="panel" id="tools">
+      <!-- ========== 右侧诊断面板 ========== -->
+      <aside class="panel">
         <div class="info-card">
-          <div class="info-card-title">
-            <span class="gold-dot"></span>本次回答
-          </div>
-          <div class="info-kv">
-            <span>模式</span>
-            <strong id="mode-tag">未请求</strong>
-          </div>
-          <div class="info-kv">
-            <span>自动生成</span>
-            <strong id="auto-tag">-</strong>
-          </div>
-          <div class="info-kv">
-            <span>使用工具</span>
-            <strong id="tools-tag">-</strong>
-          </div>
+          <h3 class="info-title">
+            <i class="dot"></i>本次回答
+          </h3>
+          <div class="kv"><span>模式</span><strong id="mode-tag">-</strong></div>
+          <div class="kv"><span>自动生成</span><strong id="auto-tag">-</strong></div>
+          <div class="kv"><span>工具</span><strong id="tools-tag">-</strong></div>
         </div>
-
         <div class="info-card">
-          <div class="info-card-title">
-            <span class="gold-dot"></span>工具结果
-          </div>
-          <pre id="tool-results" class="code-box">等待请求...</pre>
+          <h3 class="info-title">
+            <i class="dot"></i>工具结果
+          </h3>
+          <pre id="tool-results" class="json-box">等待请求…</pre>
         </div>
-
         <div class="info-card">
-          <div class="info-card-title">
-            <span class="gold-dot"></span>处理说明
-          </div>
-          <ul class="notes">
-            <li><span class="note-dot red"></span>MCP 工具调用优先</li>
-            <li><span class="note-dot blue"></span>RAG 知识库检索兜底</li>
-            <li><span class="note-dot gold"></span>自动生成回答并标注</li>
+          <h3 class="info-title">
+            <i class="dot"></i>处理流程
+          </h3>
+          <ul class="flow-notes">
+            <li><i class="flow-dot red"></i>MCP 工具调用优先</li>
+            <li><i class="flow-dot blue"></i>RAG 知识库检索兜底</li>
+            <li><i class="flow-dot gold"></i>自动生成回答并标注</li>
           </ul>
         </div>
       </aside>
     </main>
 
-    <!-- 底部 — HFUT 风格 footer -->
+    <!-- ============================================================ -->
+    <!-- 底部 — 参考 .footer 深色背景 + 红色底边 + 红色下划线装饰 -->
+    <!-- ============================================================ -->
     <footer class="site-footer">
       <div class="footer-inner">
-        <div class="footer-col">
-          <strong>合肥工业大学</strong>
-          <p>Hefei University of Technology</p>
+        <div class="footer-brand">
+          <b>合肥工业大学</b>
+          <span>Hefei University of Technology</span>
         </div>
-        <div class="footer-col">
+        <div class="footer-links">
           <span>校园智能问答助手 v0.5</span>
-          <span>基于 FastAPI + LangChain + ChromaDB</span>
+          <span>FastAPI + LangChain + ChromaDB + MCP</span>
         </div>
-        <div class="footer-col footer-right">
+        <div class="footer-right">
           <span>© 2026 Campus Smart Q&A</span>
-          <span>厚德·笃学·崇实·尚新</span>
+          <span>厚德 · 笃学 · 崇实 · 尚新</span>
         </div>
       </div>
     </footer>
+
   </body>
 </html>

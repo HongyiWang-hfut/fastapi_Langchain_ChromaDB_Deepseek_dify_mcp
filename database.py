@@ -114,5 +114,30 @@ def log_interaction(
         return log.id
 
 
+def get_interaction_logs(student_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    """获取指定学生的交互日志（完整 Q&A 对），按时间倒序。"""
+    with SessionLocal() as session:
+        logs = (
+            session.query(InteractionLog)
+            .filter(InteractionLog.student_id == student_id)
+            .order_by(InteractionLog.id.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": log.id,
+                "student_id": log.student_id,
+                "question": log.question,
+                "answer": log.answer,
+                "mode": log.mode,
+                "auto_generated": bool(log.auto_generated),
+                "tools_used": [t for t in (log.tools_used or "").split(",") if t],
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ]
+
+
 # 启动时自动建表
 init_db()

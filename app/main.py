@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -23,6 +23,7 @@ from config.intent_classifier import IntentClassifier
 from database import (
     clear_conversation_history,
     get_conversation_history,
+    get_interaction_logs,
     log_interaction,
     save_conversation,
 )
@@ -416,3 +417,28 @@ async def ask_stream(request: AskRequest, _auth=Depends(verify_api_key)) -> Stre
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/history/{student_id}")
+async def get_history(student_id: str, limit: int = 50, _auth=Depends(verify_api_key)) -> dict:
+    """获取指定学生的交互历史（完整 Q&A 对，按时间倒序）。"""
+    logs = get_interaction_logs(student_id, limit=limit)
+    return {"student_id": student_id, "count": len(logs), "logs": logs}
+
+
+@app.get("/knowledge/search")
+async def knowledge_search(
+    q: str = Query(..., min_length=1, description="检索关键词"),
+    k: int = Query(5, ge=1, le=20, description="返回条数"),
+    _auth=Depends(verify_api_key),
+) -> dict:
+    """RAG 知识库混合检索演示：返回命中文档与相似度分数。"""
+    hybrid = _get_hybrid_retriever()
+    hits = await asyncio.to_thread(
+        hybrid.retrieve,
+        q,
+        k=k,
+        max_margin_from_best=0.3,
+        max_distance=0.85,
+    )
+    return {"query": q, "count": len(hits), "hits": hits}

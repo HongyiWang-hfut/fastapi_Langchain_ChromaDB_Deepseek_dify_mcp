@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -179,9 +181,11 @@ async def _call_tools_for_intent(intent: str | None, question: str, student_id: 
         }
         label = label_map.get(tool_name, tool_name)
         try:
-            data = await mcp_client.call_tool(tool_name, **kwargs)
+            data = await asyncio.to_thread(mcp_client.call_tool_blocking, tool_name, **kwargs)
             results[label] = str(data)
         except Exception as exc:
+            import traceback as _tb
+            _tb.print_exc()
             results[label] = f"获取失败: {exc}"
 
     return results

@@ -511,7 +511,120 @@ INITERS.knowledge = function initKnowledge() {
     e.preventDefault();
     searchKnowledge();
   });
+
+  // 上传
+  $('#know-upload-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const input = $('#know-file');
+    const files = input.files;
+    if (!files || files.length === 0) return;
+
+    const btn = e.target.querySelector('button[type=submit]');
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '上传中…';
+
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append('file', f);
+      try {
+        const r = await fetch('/knowledge/upload', {
+          method: 'POST',
+          headers: { 'X-API-Key': ($('#api-key')?.value.trim() || state.apiKey) },
+          body: fd,
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d?.detail || `HTTP ${r.status}`);
+        addKnowFileMsg(`✅ ${f.name}：${d.chunks_added} 个块已入库`);
+      } catch (err) {
+        addKnowFileMsg(`❌ ${f.name} 上传失败：${err.message}`);
+      }
+    }
+
+    btn.disabled = false;
+    btn.textContent = origText;
+    input.value = '';
+    loadKnowledgeFiles();
+  });
+
+  // 刷新文件列表
+  $('#know-refresh').addEventListener('click', loadKnowledgeFiles);
+  loadKnowledgeFiles();
 };
+
+function addKnowFileMsg(text) {
+  const box = $('#know-files');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'know-file-msg';
+  div.textContent = text;
+  box.prepend(div);
+  setTimeout(() => div.remove(), 5000);
+}
+
+async function loadKnowledgeFiles() {
+  const box = $('#know-files');
+  if (!box) return;
+  box.innerHTML = '<div class="skeleton" style="height:50px;border-radius:10px"></div>';
+  try {
+    const r = await fetch('/knowledge/files', { headers: headers() });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.detail || `HTTP ${r.status}`);
+    renderKnowledgeFiles(d.files);
+  } catch (e) {
+    box.innerHTML = `<div class="know-empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+function _sourceTag(f) {
+  if (f.source === 'hfut_official') return { cls: 'official', text: '官网' };
+  if (f.source === 'user_upload') return { cls: 'user', text: '自定义' };
+  return { cls: 'campus', text: '校园' };
+}
+
+function renderKnowledgeFiles(files) {
+  const box = $('#know-files');
+  if (!files || files.length === 0) {
+    box.innerHTML = '<div class="know-empty">暂无已入库文件，上传几个 txt/md/pdf 试试。</div>';
+    return;
+  }
+  box.innerHTML = files.map(f => {
+    const tag = _sourceTag(f);
+    const dateTxt = f.date ? ` · ${esc(f.date)}` : '';
+    return `
+    <div class="know-file" data-key="${esc(f.key)}">
+      <div class="know-file-info">
+        <div class="know-file-name">${esc(f.filename)}</div>
+        <div class="know-file-meta">
+          <span class="know-tag ${tag.cls}">${tag.text}</span>
+          ${f.category ? `<span class="know-tag category">${esc(f.category)}</span>` : ''}
+          <span class="know-chunks">${f.chunks} chunks</span>
+        </div>
+        ${f.title ? `<div class="know-file-title">${esc(f.title)}${dateTxt}</div>` : ''}
+      </div>
+      <button class="know-delete" data-key="${esc(f.key)}" title="删除该条目及其所有向量块">删除</button>
+    </div>`;
+  }).join('');
+
+  // 绑定删除
+  $$('.know-delete', box).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.key;
+      if (!confirm(`确定删除「${key}」及其所有知识块？此操作不可恢复。`)) return;
+      try {
+        const r = await fetch('/knowledge/files?key=' + encodeURIComponent(key), {
+          method: 'DELETE',
+          headers: headers(),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d?.detail || `HTTP ${r.status}`);
+        loadKnowledgeFiles();
+      } catch (e) {
+        alert('删除失败：' + e.message);
+      }
+    });
+  });
+}
 
 async function searchKnowledge() {
   const q = $('#know-q').value.trim();
@@ -538,15 +651,18 @@ async function searchKnowledge() {
 function renderKnowResults(d) {
   const box = $('#know-results');
   if (!d.count) { box.innerHTML = '<div class="know-empty">未命中相关文档，换个关键词试试。</div>'; return; }
-  box.innerHTML = d.hits.map((h, i) => `
+  box.innerHTML = d.hits.map((h, i) => {
+    const src = h.metadata?.source || h.source || 'hybrid';
+    return `
     <div class="know-hit">
       <div class="know-hit-head">
         <strong>#${i + 1} 命中文档</strong>
         <span class="know-hit-score">距离 ${Number(h.distance ?? 0).toFixed(3)}</span>
       </div>
       <div class="know-hit-content">${esc(h.content || '').slice(0, 240)}${(h.content || '').length > 240 ? '…' : ''}</div>
-      <div class="know-hit-meta">来源：${esc(h.source || 'hybrid')} · 模式：向量 + BM25 RRF 融合</div>
-    </div>`).join('');
+      <div class="know-hit-meta">来源：${esc(src)} · 模式：向量 + BM25 RRF 融合</div>
+    </div>`;
+  }).join('');
 }
 
 /* ============================================================

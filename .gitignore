@@ -15,3 +15,6 @@ chroma_db/
 # 本地数据库与调试脚本
 data/*.db
 scripts/
+
+server.log
+data/uploads/

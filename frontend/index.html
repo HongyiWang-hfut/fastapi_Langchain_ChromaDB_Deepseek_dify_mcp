@@ -327,6 +327,26 @@
                 <div class="know-empty">输入关键词后点击「检索」查看命中文档与相似度分数。</div>
               </div>
             </div>
+
+            <!-- 知识库文件上传与管理 -->
+            <div class="glass card know-upload-box">
+              <h4 class="know-sub-h">📁 自定义知识库文件</h4>
+              <p class="hint">支持上传 .txt / .md / .pdf，系统会自动切分并向量化入库。已入库文件可查看、可删除。</p>
+
+              <form id="know-upload-form" class="know-upload-form" enctype="multipart/form-data">
+                <label for="know-file" class="sr-only">选择知识库文件</label>
+                <input type="file" id="know-file" name="file" accept=".txt,.md,.pdf" multiple />
+                <button type="submit" class="send-btn">上 传</button>
+              </form>
+
+              <div class="know-files-head">
+                <h5>已入库文件</h5>
+                <button type="button" id="know-refresh" class="ghost-btn">刷新</button>
+              </div>
+              <div id="know-files" class="know-files">
+                <div class="know-empty">加载中...</div>
+              </div>
+            </div>
           </section>
 
           <!-- ================== 校园文化 ================== -->

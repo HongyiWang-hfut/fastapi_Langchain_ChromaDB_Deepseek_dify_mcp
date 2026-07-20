@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -79,9 +79,9 @@ async def lifespan(_app: FastAPI):
     """
     logger.info("启动预热：开始初始化重型组件...")
     try:
-        await asyncio.to_thread(_get_vectorstore)
+        await asyncio.to_thread(_get_fresh_vectorstore)
         logger.info("向量库就绪")
-        await asyncio.to_thread(_get_hybrid_retriever)
+        await asyncio.to_thread(_get_fresh_hybrid_retriever)
         logger.info("混合检索器就绪")
         await asyncio.to_thread(_get_intent_classifier)
         logger.info("意图分类器就绪")
@@ -176,27 +176,20 @@ def _get_llm() -> ChatOpenAI:
     )
 
 
-@lru_cache
-def _get_vectorstore():
-    """加载或自动初始化向量库。"""
-    return load_or_rebuild_campus_chroma(
-        data_directory=PROJECT_ROOT / "data",
-        persist_directory=PROJECT_ROOT / "chroma_db",
-        collection_name="campus_rag",
-    )
+def _get_fresh_hybrid_retriever() -> HybridRetriever:
+    """构建最新混合检索器（基于最新向量库，绕过 lru_cache）。
 
-
-@lru_cache
-def _get_hybrid_retriever():
-    """构建混合检索器（向量+BM25）。"""
-    vs = _get_vectorstore()
-    # 从向量库中提取所有文本作为 BM25 语料
+    每次都重新打开 Chroma 并重建 BM25，保证检索能看到运行时上传/爬取的新文档；
+    代价是每次请求多一次向量库拉取 + BM25 重建（~300 文档量级，数十毫秒，可接受）。
+    """
+    vs = _get_fresh_vectorstore()
     try:
-        all_docs = vs._collection.get()
-        corpus = all_docs.get("documents", []) or []
+        all_data = vs._collection.get(include=["documents", "metadatas"])
+        corpus = all_data.get("documents", []) or []
+        metadatas = all_data.get("metadatas", []) or []
     except Exception:
-        corpus = []
-    return HybridRetriever(vs, corpus=corpus)
+        corpus, metadatas = [], []
+    return HybridRetriever(vs, corpus=corpus, metadatas=metadatas)
 
 
 @lru_cache
@@ -284,8 +277,8 @@ async def _build_context_prompt(question: str, student_id: str) -> tuple[str, li
             llm_prompt = MCP_USER_TEMPLATE.format(tool_context=tool_context, question=question)
             return llm_prompt, tools_used, tool_results, auto_generated, "mcp"
 
-    # Step 2: RAG 混合检索（向量 + BM25）
-    hybrid = _get_hybrid_retriever()
+    # Step 2: RAG 混合检索（向量 + BM25），实时拉取最新向量库
+    hybrid = _get_fresh_hybrid_retriever()
     hits = await asyncio.to_thread(
         hybrid.retrieve,
         question,
@@ -465,7 +458,7 @@ async def knowledge_search(
     _auth=Depends(verify_api_key),
 ) -> dict:
     """RAG 知识库混合检索演示：返回命中文档与相似度分数。"""
-    hybrid = _get_hybrid_retriever()
+    hybrid = _get_fresh_hybrid_retriever()
     hits = await asyncio.to_thread(
         hybrid.retrieve,
         q,
@@ -474,3 +467,215 @@ async def knowledge_search(
         max_distance=0.85,
     )
     return {"query": q, "count": len(hits), "hits": hits}
+
+
+# ============================================================
+# 知识库文件管理
+# ============================================================
+
+ALLOWED_KNOWLEDGE_EXTS = {".txt", ".md", ".pdf"}
+KNOWLEDGE_UPLOAD_DIR = PROJECT_ROOT / "data" / "uploads"
+
+
+def _get_fresh_vectorstore():
+    """获取最新向量库实例（绕过 lru_cache）。
+
+    知识库支持运行时上传/爬取入库，若复用启动时缓存的实例会看不到新数据，
+    导致 /knowledge/files 为空、检索失败。这里每次调用都重新打开 Chroma。
+    """
+    return load_or_rebuild_campus_chroma(
+        data_directory=PROJECT_ROOT / "data",
+        persist_directory=PROJECT_ROOT / "chroma_db",
+        collection_name="campus_rag",
+    )
+
+
+def _aggregate_key(md: dict) -> str:
+    """计算文档归属的"文件/条目"标识，用于列表聚合与删除。
+
+    兼容三种入库元数据：
+    - 用户上传：含 source_file
+    - 本地校园文档：source 即文件全路径
+    - 官网爬取资讯：含 url（每篇唯一）
+    """
+    sf = md.get("source_file")
+    if sf:
+        return sf
+    src = md.get("source") or ""
+    if src and ("\\" in src or "/" in src or src.lower().endswith((".txt", ".md", ".pdf"))):
+        return src
+    url = md.get("url")
+    if url:
+        return url
+    return md.get("title") or src or "unknown"
+
+
+def _source_kind(md: dict) -> str:
+    """归类：campus（本地校园文档）/ user_upload（用户上传）/ hfut_official（官网爬取）。"""
+    src = md.get("source") or ""
+    if src in ("hfut_official", "user_upload"):
+        return src
+    return "campus"
+
+
+def _display_name(key: str, md: dict) -> str:
+    """列表展示名：官网资讯用标题，文件用文件名。"""
+    if md.get("source") == "hfut_official":
+        return md.get("title") or (key.rsplit("/", 1)[-1] if "/" in key else key)
+    return os.path.basename(key) if ("\\" in key or "/" in key) else key
+
+
+def _knowledge_file_metadata() -> list[dict]:
+    """扫描 ChromaDB，按归属标识聚合已入库文件/资讯条目。"""
+    vs = _get_fresh_vectorstore()
+    collection = vs._collection
+    # 拉全量 metadata（Chroma 限制：不能用 select 字段，只能全量拉）
+    data = collection.get(include=["metadatas"])
+    metadatas = data.get("metadatas", []) or []
+    agg: dict[str, dict] = {}
+    for md in metadatas:
+        if not md:
+            continue
+        key = _aggregate_key(md)
+        kind = _source_kind(md)
+        item = agg.get(key)
+        if item is None:
+            item = {
+                "key": key,
+                "filename": _display_name(key, md),
+                "chunks": 0,
+                "source": kind,  # campus / user_upload / hfut_official
+                "category": md.get("category", ""),
+                "uploaded_at": md.get("uploaded_at", ""),
+                "url": md.get("url", ""),
+                "title": md.get("title", ""),
+                "date": md.get("date", ""),
+            }
+            agg[key] = item
+        item["chunks"] += 1
+        # 不同 chunk 的 metadata 可能略有差异，用首个非空值补全
+        for fld in ("category", "url", "title", "date"):
+            if not item.get(fld) and md.get(fld):
+                item[fld] = md[fld]
+    # 排序：校园文件在前，官网/自定义次之，文件名序
+    order = {"campus": 0, "hfut_official": 1, "user_upload": 2}
+    return sorted(agg.values(), key=lambda x: (order.get(x["source"], 9), x["filename"]))
+
+
+@app.get("/knowledge/files")
+async def list_knowledge_files(_auth=Depends(verify_api_key)) -> dict:
+    """列出知识库中所有已入库文件（含爬取的官网资讯）。"""
+    files = await asyncio.to_thread(_knowledge_file_metadata)
+    return {"count": len(files), "files": files}
+
+
+@app.delete("/knowledge/files")
+async def delete_knowledge_file(
+    key: str = Query(..., min_length=1, description="条目标识（文件全路径 / url / source_file）"),
+    _auth=Depends(verify_api_key),
+) -> dict:
+    """删除指定条目对应的所有向量 chunk（按 source_file / source / url 匹配）。"""
+    vs = _get_fresh_vectorstore()
+    collection = vs._collection
+    # 兼容三类标识：用户上传的 source_file、本地文件的 source 路径、官网资讯的 url
+    data = collection.get(
+        where={"$or": [
+            {"source_file": key},
+            {"source": key},
+            {"url": key},
+        ]},
+        include=[],
+    )
+    ids = data.get("ids", []) or []
+    if not ids:
+        raise HTTPException(status_code=404, detail=f"未找到条目: {key}")
+
+    await asyncio.to_thread(collection.delete, ids=ids)
+    return {"status": "ok", "key": key, "deleted_chunks": len(ids)}
+
+
+def _read_upload_content(upload: UploadFile) -> str:
+    """根据扩展名读取上传文件内容为纯文本。"""
+    filename = upload.filename or "unnamed"
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_KNOWLEDGE_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型: {ext}，仅支持 {', '.join(ALLOWED_KNOWLEDGE_EXTS)}",
+        )
+
+    raw = upload.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="文件内容为空")
+
+    if ext == ".pdf":
+        try:
+            from pypdf import PdfReader
+            import io
+
+            reader = PdfReader(io.BytesIO(raw))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            return text.strip()
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"PDF 解析失败: {exc}") from exc
+
+    # txt / md：尝试 utf-8，失败则 gbk
+    for encoding in ("utf-8", "gbk", "gb18030"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(status_code=400, detail="文本编码无法识别（支持 UTF-8/GBK）")
+
+
+@app.post("/knowledge/upload")
+async def upload_knowledge_file(
+    file: UploadFile = File(...),
+    _auth=Depends(verify_api_key),
+) -> dict:
+    """上传自定义知识库文件（.txt/.md/.pdf），切分后向量化入库。"""
+    filename = os.path.basename(file.filename or "unnamed")
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_KNOWLEDGE_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型: {ext}，仅支持 {', '.join(ALLOWED_KNOWLEDGE_EXTS)}",
+        )
+
+    # 读取内容（同步 I/O，放到线程）
+    content = await asyncio.to_thread(_read_upload_content, file)
+    if len(content) < 20:
+        raise HTTPException(status_code=400, detail="文件内容过短（<20 字符）")
+
+    # 保存原始文件到 data/uploads 方便回溯
+    KNOWLEDGE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = KNOWLEDGE_UPLOAD_DIR / filename
+    await asyncio.to_thread(save_path.write_text, content, encoding="utf-8")
+
+    # 构造 Document 并切分
+    from datetime import datetime, timezone
+
+    from langchain_core.documents import Document
+
+    uploaded_at = datetime.now(timezone.utc).isoformat()
+    doc = Document(
+        page_content=content,
+        metadata={
+            "source": "user_upload",
+            "source_file": filename,
+            "uploaded_at": uploaded_at,
+        },
+    )
+    from document_processing import split_campus_documents
+
+    chunks = split_campus_documents([doc])
+
+    vs = _get_fresh_vectorstore()
+    await asyncio.to_thread(vs.add_documents, chunks)
+
+    return {
+        "status": "ok",
+        "filename": filename,
+        "chunks_added": len(chunks),
+        "total_documents": vs._collection.count(),
+    }
